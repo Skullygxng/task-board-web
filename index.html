@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Task Board">
@@ -47,6 +47,13 @@ body {
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
+  touch-action: pan-x pan-y;
+}
+body.has-wall { background: transparent; }
+body.has-wall::before {
+  content: ""; position: fixed; inset: 0; z-index: -1;
+  background-image: linear-gradient(color-mix(in srgb, var(--bg) 72%, transparent), color-mix(in srgb, var(--bg) 72%, transparent)), var(--wall-img);
+  background-size: cover; background-position: center;
 }
 button { font: inherit; color: inherit; cursor: pointer; }
 button:active { opacity: 0.85; }
@@ -157,7 +164,7 @@ button:active { opacity: 0.85; }
 .search {
   display: block; margin-top: 14px; width: 100%; padding: 10px 14px;
   border-radius: 14px; border: 1px solid var(--line);
-  background: var(--card); color: var(--text); font: inherit; font-size: 15px;
+  background: var(--card); color: var(--text); font: inherit; font-size: 16px;
 }
 .search:focus { outline: none; border-color: var(--accent); }
 
@@ -183,7 +190,7 @@ button:active { opacity: 0.85; }
 }
 .quickbar input {
   flex: 1; min-width: 0; border: none; background: transparent; color: var(--text);
-  font: inherit; font-size: 15px; padding: 6px 2px; resize: none;
+  font: inherit; font-size: 16px; padding: 6px 2px; resize: none;
 }
 .quickbar input:focus { outline: none; }
 .round-btn { width: 38px; height: 38px; border-radius: 50%; border: none; flex: none; display: flex; align-items: center; justify-content: center; transition: transform 0.15s; }
@@ -213,7 +220,7 @@ button:active { opacity: 0.85; }
 }
 .field input, .field select, .field textarea {
   width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line);
-  background: var(--bg); color: var(--text); font: inherit; font-size: 15px;
+  background: var(--bg); color: var(--text); font: inherit; font-size: 16px;
 }
 .field textarea { resize: vertical; min-height: 66px; }
 .seg { display: flex; background: var(--panel); border-radius: 13px; padding: 3px; gap: 3px; }
@@ -294,7 +301,8 @@ const I = {
   restore: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3.5 13a9 9 0 1 0 2.6-7L3 7.5"/></svg>',
   trash: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
   pencil: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3l4 4L8 20l-5 1 1-5z"/></svg>',
-  copy: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>'
+  copy: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
+  photo: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>'
 };
 
 // ===== state =====
@@ -318,6 +326,16 @@ function loadState() {
   return { projects: [], tasks: [] };
 }
 function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+function applyWallpaper() {
+  const w = state.wall;
+  if (w) {
+    document.body.classList.add("has-wall");
+    document.body.style.setProperty("--wall-img", 'url("' + w + '")');
+  } else {
+    document.body.classList.remove("has-wall");
+    document.body.style.removeProperty("--wall-img");
+  }
+}
 function snapshot() {
   undoStack.push(JSON.stringify(state));
   if (undoStack.length > 30) undoStack.shift();
@@ -730,6 +748,7 @@ function openHomeMenu() {
   showModal(
     '<h2>More</h2>' +
     '<div class="action-list">' +
+      '<button class="action" data-hm="wall"><span class="a-icon">' + I.photo + '</span>Wallpaper</button>' +
       '<button class="action" data-hm="archive"><span class="a-icon">' + I.archive + '</span>Archive</button>' +
       '<button class="action" data-hm="md"><span class="a-icon">' + I.export_ + '</span>Export as Markdown</button>' +
       '<button class="action" data-hm="backup"><span class="a-icon">' + I.export_ + '</span>Download backup (.json)</button>' +
@@ -737,6 +756,7 @@ function openHomeMenu() {
     '</div>' +
     '<input type="file" id="importFile" accept=".json,application/json" style="display:none">',
     modal => {
+      modal.querySelector('[data-hm="wall"]').addEventListener("click", openWallpaperSheet);
       modal.querySelector('[data-hm="archive"]').addEventListener("click", openArchive);
       modal.querySelector('[data-hm="md"]').addEventListener("click", () => {
         download("task-board.md", exportMarkdown(), "text/markdown");
@@ -769,6 +789,68 @@ function openHomeMenu() {
         reader.readAsText(file);
       });
     });
+}
+
+function openWallpaperSheet() {
+  showModal(
+    '<h2>Wallpaper</h2>' +
+    '<div class="action-list">' +
+      '<button class="action" data-wp="photo"><span class="a-icon">' + I.photo + '</span>Choose photo</button>' +
+      (state.wall ? '<button class="action destructive" data-wp="remove"><span class="a-icon">' + I.x + '</span>Remove wallpaper</button>' : "") +
+    '</div>' +
+    '<div class="tip" style="padding:14px 4px 6px">Your photo stays on this device — it is never uploaded. Cards and panels stay solid so text remains readable.</div>' +
+    '<input type="file" id="wallFile" accept="image/*" style="display:none">',
+    modal => {
+      const fileInput = modal.querySelector("#wallFile");
+      modal.querySelector('[data-wp="photo"]').addEventListener("click", () => fileInput.click());
+      const removeBtn = modal.querySelector('[data-wp="remove"]');
+      if (removeBtn) removeBtn.addEventListener("click", () => {
+        snapshot();
+        state.wall = null;
+        save();
+        applyWallpaper();
+        closeModal();
+        render();
+        toast("Wallpaper removed");
+      });
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => {
+            const compressed = compressImage(img, 1280, 0.7);
+            snapshot();
+            state.wall = compressed;
+            save();
+            applyWallpaper();
+            closeModal();
+            render();
+            toast("Wallpaper set");
+          };
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+}
+
+function compressImage(img, maxEdge, quality) {
+  const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+  const w = Math.max(1, Math.round(img.width * scale));
+  const h = Math.max(1, Math.round(img.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = w; canvas.height = h;
+  canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+  let url = canvas.toDataURL("image/jpeg", quality);
+  if (url.length > 1800000) {
+    const canvas2 = document.createElement("canvas");
+    canvas2.width = Math.round(w * 0.7); canvas2.height = Math.round(h * 0.7);
+    canvas2.getContext("2d").drawImage(canvas, 0, 0, canvas2.width, canvas2.height);
+    url = canvas2.toDataURL("image/jpeg", 0.55);
+  }
+  return url;
 }
 
 // ===== actions =====
@@ -999,7 +1081,9 @@ window.addEventListener("hashchange", () => {
 });
 
 // ===== boot =====
+document.addEventListener("gesturestart", e => e.preventDefault());
 render();
+applyWallpaper();
 </script>
 </body>
 </html>
