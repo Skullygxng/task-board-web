@@ -12,7 +12,7 @@
 <style>
 :root {
   --accent: #0d9488;
-  --accent-soft: rgba(13, 148, 136, 0.12);
+  --accent-soft: rgba(13, 148, 136, 0.13);
   --bg: #faf8f4;
   --card: #ffffff;
   --panel: #f1efe9;
@@ -25,9 +25,14 @@
   --shadow-float: 0 2px 6px rgba(34, 33, 30, 0.08), 0 14px 38px rgba(34, 33, 30, 0.16);
   --serif: ui-serif, "New York", Georgia, serif;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --wall-dim: 0.72;
+  --wall-blur: 0px;
+  --wall-scale: 1;
+  --wall-x: 50%;
+  --wall-y: 50%;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #141614;
     --card: #201f1c;
     --panel: #262522;
@@ -38,6 +43,17 @@
     --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px rgba(0, 0, 0, 0.25);
     --shadow-float: 0 2px 6px rgba(0, 0, 0, 0.4), 0 14px 38px rgba(0, 0, 0, 0.5);
   }
+}
+:root[data-theme="dark"] {
+  --bg: #141614;
+  --card: #201f1c;
+  --panel: #262522;
+  --panel-strong: #2e2d29;
+  --text: #efede6;
+  --muted: #98958a;
+  --line: rgba(239, 237, 230, 0.11);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px rgba(0, 0, 0, 0.25);
+  --shadow-float: 0 2px 6px rgba(0, 0, 0, 0.4), 0 14px 38px rgba(0, 0, 0, 0.5);
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { height: 100%; }
@@ -50,11 +66,19 @@ body {
   touch-action: pan-x pan-y;
 }
 body.has-wall { background: transparent; }
-body.has-wall::before {
-  content: ""; position: fixed; inset: 0; z-index: -1;
-  background-image: linear-gradient(color-mix(in srgb, var(--bg) 72%, transparent), color-mix(in srgb, var(--bg) 72%, transparent)), var(--wall-img);
-  background-size: cover; background-position: center;
+#wall { position: fixed; inset: 0; z-index: -2; overflow: hidden; background: var(--bg); display: none; }
+body.has-wall #wall { display: block; }
+#wall .w-img {
+  position: absolute; inset: calc(var(--wall-blur) * -2);
+  background-image: var(--wall-img);
+  background-size: cover; background-repeat: no-repeat;
+  background-position: var(--wall-x) var(--wall-y);
+  transform: scale(var(--wall-scale));
+  transform-origin: var(--wall-x) var(--wall-y);
+  filter: blur(var(--wall-blur));
+  will-change: transform, filter;
 }
+#wall .w-dim { position: absolute; inset: 0; background: var(--bg); opacity: var(--wall-dim); }
 button { font: inherit; color: inherit; cursor: pointer; }
 button:active { opacity: 0.85; }
 
@@ -249,6 +273,61 @@ button:active { opacity: 0.85; }
 .small-btn { border: 1px solid var(--line); background: var(--bg); border-radius: 11px; padding: 7px 13px; font-size: 12px; font-weight: 750; flex: none; }
 .small-btn.danger { color: var(--danger); }
 
+/* ===== appearance ===== */
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.swatch {
+  position: relative; width: 38px; height: 38px; border-radius: 50%; padding: 0;
+  border: 2px solid transparent; background: transparent;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.15s;
+}
+.swatch:active { transform: scale(0.92); }
+.swatch i { width: 28px; height: 28px; border-radius: 50%; display: block; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08); }
+.swatch.active { border-color: var(--text); }
+.swatch.custom { border-style: dashed; border-color: var(--line); }
+.swatch.custom i { width: 24px; height: 24px; }
+.field .swatch.custom input {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  padding: 0; border: none; border-radius: 50%; opacity: 0; background: transparent;
+}
+.wp-empty {
+  padding: 22px 14px; text-align: center; color: var(--muted);
+  font-size: 12.5px; line-height: 1.5;
+  border: 1.5px dashed var(--line); border-radius: 16px;
+}
+.wp-preview {
+  position: relative; height: 196px; border-radius: 18px; overflow: hidden;
+  border: 1px solid var(--line); background: var(--panel); touch-action: none; margin-bottom: 8px;
+}
+.wp-preview .p-img {
+  position: absolute; inset: -16px;
+  background-image: var(--wall-img);
+  background-size: cover; background-repeat: no-repeat; background-position: 50% 50%;
+}
+.wp-preview .p-dim { position: absolute; inset: 0; background: var(--bg); opacity: 0.72; }
+.wp-preview .p-hint {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  font-size: 9.5px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase;
+  color: #fff; background: rgba(20, 18, 14, 0.42); padding: 4px 10px; border-radius: 999px;
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); white-space: nowrap;
+}
+.wp-preview .p-card {
+  position: absolute; left: 12px; right: 12px; bottom: 12px;
+  background: var(--card); border-radius: 14px; padding: 10px 12px; box-shadow: var(--shadow-card);
+}
+.wp-preview .p-title { font-family: var(--serif); font-size: 14px; font-weight: 650; letter-spacing: -0.2px; }
+.wp-preview .p-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.range-row { display: flex; align-items: center; gap: 10px; margin: 10px 0 6px; }
+.range-row > label {
+  width: 46px; flex: none; font-size: 11px; font-weight: 800;
+  letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); margin: 0;
+}
+.field .range-row input[type="range"] {
+  flex: 1; width: auto; padding: 0; border: none; background: transparent;
+  accent-color: var(--accent); height: 28px;
+}
+.range-row .val { width: 42px; flex: none; text-align: right; font-size: 11px; font-weight: 700; color: var(--muted); }
+
 #toast {
   position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom));
   transform: translateX(-50%) translateY(8px); background: #2a2823; color: #f4f2ec;
@@ -260,6 +339,7 @@ button:active { opacity: 0.85; }
 </style>
 </head>
 <body>
+<div id="wall" aria-hidden="true"><div class="w-img"></div><div class="w-dim"></div></div>
 <div id="app"></div>
 <div id="modal"></div>
 <script>
@@ -302,7 +382,8 @@ const I = {
   trash: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
   pencil: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3l4 4L8 20l-5 1 1-5z"/></svg>',
   copy: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
-  photo: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>'
+  photo: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>',
+  palette: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.5 0 2.2-1 2.2-2 0-1.5-1.4-2-1.3-3.2 0.1-0.9 0.9-1.3 1.9-1.3H17a4 4 0 0 0 4-4c0-4.1-4-7.5-9-7.5z"/><circle cx="7.6" cy="12.4" r="1.1"/><circle cx="9.8" cy="8.4" r="1.1"/><circle cx="14.6" cy="7.8" r="1.1"/></svg>'
 };
 
 // ===== state =====
@@ -326,14 +407,61 @@ function loadState() {
   return { projects: [], tasks: [] };
 }
 function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
-function applyWallpaper() {
-  const w = state.wall;
-  if (w) {
+const ACCENTS = ["#0d9488", "#22a06b", "#3b82f6", "#5b5bd6", "#8e4ec6", "#d6409f", "#dc4444", "#d98324", "#eab308", "#64748b"];
+
+const DEFAULT_LOOK = {
+  theme: "system", accent: "",
+  wall: null, wallDim: 0.72, wallBlur: 0, wallScale: 1, wallX: 50, wallY: 50
+};
+
+function appearance() {
+  if (!state.app || typeof state.app !== "object") state.app = {};
+  const a = state.app;
+  if (!a.wall && state.wall) { a.wall = state.wall; state.wall = null; }
+  Object.keys(DEFAULT_LOOK).forEach(k => {
+    if (a[k] === undefined || (a[k] === null && k !== "wall" && k !== "accent")) a[k] = DEFAULT_LOOK[k];
+  });
+  a.theme = ["system", "light", "dark"].indexOf(a.theme) >= 0 ? a.theme : "system";
+  a.accent = typeof a.accent === "string" ? a.accent : "";
+  a.wallDim = clamp(Number(a.wallDim), 0.1, 0.98);
+  a.wallBlur = clamp(Number(a.wallBlur) || 0, 0, 40);
+  a.wallScale = clamp(Number(a.wallScale) || 1, 1, 4);
+  a.wallX = clamp(Number(a.wallX) || 0, 0, 100);
+  a.wallY = clamp(Number(a.wallY) || 0, 0, 100);
+  return a;
+}
+
+function hexToRgba(hex, alpha) {
+  let h = String(hex || "").replace("#", "");
+  if (h.length === 3) h = h.split("").map(c => c + c).join("");
+  const n = parseInt(h, 16);
+  if (h.length !== 6 || isNaN(n)) return "rgba(13, 148, 136, " + alpha + ")";
+  return "rgba(" + ((n >> 16) & 255) + ", " + ((n >> 8) & 255) + ", " + (n & 255) + ", " + alpha + ")";
+}
+
+function applyAppearance() {
+  const a = appearance();
+  const root = document.documentElement;
+  if (a.theme === "light" || a.theme === "dark") root.setAttribute("data-theme", a.theme);
+  else root.removeAttribute("data-theme");
+  if (a.accent) {
+    root.style.setProperty("--accent", a.accent);
+    root.style.setProperty("--accent-soft", hexToRgba(a.accent, 0.13));
+  } else {
+    root.style.removeProperty("--accent");
+    root.style.removeProperty("--accent-soft");
+  }
+  if (a.wall) {
     document.body.classList.add("has-wall");
-    document.body.style.setProperty("--wall-img", 'url("' + w + '")');
+    root.style.setProperty("--wall-img", 'url("' + a.wall + '")');
+    root.style.setProperty("--wall-dim", String(a.wallDim));
+    root.style.setProperty("--wall-blur", a.wallBlur + "px");
+    root.style.setProperty("--wall-scale", String(a.wallScale));
+    root.style.setProperty("--wall-x", a.wallX + "%");
+    root.style.setProperty("--wall-y", a.wallY + "%");
   } else {
     document.body.classList.remove("has-wall");
-    document.body.style.removeProperty("--wall-img");
+    root.style.removeProperty("--wall-img");
   }
 }
 function snapshot() {
@@ -353,6 +481,7 @@ function updateUndoButtons() {
 
 // ===== helpers =====
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "id-" + Date.now() + "-" + Math.random().toString(36).slice(2));
 const fmtDate = ts => new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
@@ -416,6 +545,7 @@ function route() {
 }
 
 function render() {
+  applyAppearance();
   const app = document.getElementById("app");
   const r = route();
   if (r.view === "board") {
@@ -748,7 +878,7 @@ function openHomeMenu() {
   showModal(
     '<h2>More</h2>' +
     '<div class="action-list">' +
-      '<button class="action" data-hm="wall"><span class="a-icon">' + I.photo + '</span>Wallpaper</button>' +
+      '<button class="action" data-hm="look"><span class="a-icon">' + I.palette + '</span>Appearance &amp; wallpaper</button>' +
       '<button class="action" data-hm="archive"><span class="a-icon">' + I.archive + '</span>Archive</button>' +
       '<button class="action" data-hm="md"><span class="a-icon">' + I.export_ + '</span>Export as Markdown</button>' +
       '<button class="action" data-hm="backup"><span class="a-icon">' + I.export_ + '</span>Download backup (.json)</button>' +
@@ -756,7 +886,7 @@ function openHomeMenu() {
     '</div>' +
     '<input type="file" id="importFile" accept=".json,application/json" style="display:none">',
     modal => {
-      modal.querySelector('[data-hm="wall"]').addEventListener("click", openWallpaperSheet);
+      modal.querySelector('[data-hm="look"]').addEventListener("click", openAppearanceSheet);
       modal.querySelector('[data-hm="archive"]').addEventListener("click", openArchive);
       modal.querySelector('[data-hm="md"]').addEventListener("click", () => {
         download("task-board.md", exportMarkdown(), "text/markdown");
@@ -791,28 +921,181 @@ function openHomeMenu() {
     });
 }
 
-function openWallpaperSheet() {
+function openAppearanceSheet() {
+  const a = appearance();
+  const before = JSON.stringify(state);
+  let touched = false;
+
+  const mark = () => {
+    if (touched) return;
+    touched = true;
+    undoStack.push(before);
+    if (undoStack.length > 30) undoStack.shift();
+    updateUndoButtons();
+  };
+  const commit = () => { mark(); save(); applyAppearance(); };
+
+  const hasWall = !!a.wall;
+  const swatches = ACCENTS.map(c =>
+    '<button class="swatch' + (a.accent === c ? " active" : "") + '" data-accent="' + c + '">' +
+      '<i style="background:' + c + '"></i>' +
+    '</button>'
+  ).join("");
+
+  const themeSeg = ["system", "light", "dark"].map(k =>
+    '<button type="button" data-theme-val="' + k + '"' + (a.theme === k ? ' class="active"' : "") + '>' +
+      (k === "system" ? "System" : k === "light" ? "Light" : "Dark") +
+    '</button>'
+  ).join("");
+
+  const wallBlock = hasWall
+    ? '<div class="wp-preview" id="wpPreview">' +
+        '<div class="p-img" id="pImg"></div>' +
+        '<div class="p-dim" id="pDim"></div>' +
+        '<div class="p-hint">Drag photo to reframe</div>' +
+        '<div class="p-card"><div class="p-title">Task Board</div>' +
+          '<div class="p-sub">Sample card over your photo</div></div>' +
+      '</div>' +
+      '<div class="range-row"><label>Zoom</label>' +
+        '<input type="range" id="apZoom" min="100" max="230" step="1" value="' + Math.round(a.wallScale * 100) + '">' +
+        '<span class="val" id="apZoomV">' + (Math.round(a.wallScale * 10) / 10).toFixed(1) + '&times;</span></div>' +
+      '<div class="range-row"><label>Dim</label>' +
+        '<input type="range" id="apDim" min="15" max="95" step="1" value="' + Math.round(a.wallDim * 100) + '">' +
+        '<span class="val" id="apDimV">' + Math.round(a.wallDim * 100) + '%</span></div>' +
+      '<div class="range-row"><label>Blur</label>' +
+        '<input type="range" id="apBlur" min="0" max="16" step="1" value="' + Math.round(a.wallBlur) + '">' +
+        '<span class="val" id="apBlurV">' + Math.round(a.wallBlur) + 'px</span></div>' +
+      '<div class="sheet-actions" style="margin-top:2px">' +
+        '<button class="btn btn-plain" id="apChange">Change photo</button>' +
+        '<button class="btn btn-plain" id="apRemove">Remove</button>' +
+      '</div>'
+    : '<div class="wp-empty">No wallpaper yet — pick a photo from your library. It stays on this device, never uploaded.</div>' +
+      '<div class="sheet-actions"><button class="btn btn-plain" id="apChoose">Choose photo</button></div>';
+
   showModal(
-    '<h2>Wallpaper</h2>' +
-    '<div class="action-list">' +
-      '<button class="action" data-wp="photo"><span class="a-icon">' + I.photo + '</span>Choose photo</button>' +
-      (state.wall ? '<button class="action destructive" data-wp="remove"><span class="a-icon">' + I.x + '</span>Remove wallpaper</button>' : "") +
-    '</div>' +
-    '<div class="tip" style="padding:14px 4px 6px">Your photo stays on this device — it is never uploaded. Cards and panels stay solid so text remains readable.</div>' +
-    '<input type="file" id="wallFile" accept="image/*" style="display:none">',
+    '<h2>Appearance</h2>' +
+    '<div class="field"><label>Accent color</label><div class="swatches">' +
+      swatches +
+      '<label class="swatch custom" title="Custom color">' +
+        '<i style="background:' + (a.accent || "linear-gradient(135deg, #dc4444, #d97706, #22a06b, #0d6fb8, #6366f1, #d6409f)") + '"></i>' +
+        '<input type="color" id="apCustom" value="' + (a.accent || ACCENTS[0]) + '">' +
+      '</label>' +
+    '</div></div>' +
+    '<div class="field"><label>Appearance</label><div class="seg">' + themeSeg + '</div></div>' +
+    '<div class="field"><label>Wallpaper</label>' + wallBlock + '</div>' +
+    '<div class="action-list"><button class="action" id="apReset"><span class="a-icon">' + I.palette + '</span>Reset look to defaults</button></div>' +
+    '<input type="file" id="wallFile" accept="image/*" style="display:none">' +
+    '<div class="sheet-actions"><button class="btn btn-primary" id="apClose">Done</button></div>',
     modal => {
       const fileInput = modal.querySelector("#wallFile");
-      modal.querySelector('[data-wp="photo"]').addEventListener("click", () => fileInput.click());
-      const removeBtn = modal.querySelector('[data-wp="remove"]');
-      if (removeBtn) removeBtn.addEventListener("click", () => {
-        snapshot();
-        state.wall = null;
-        save();
-        applyWallpaper();
-        closeModal();
-        render();
-        toast("Wallpaper removed");
+      const pick = () => fileInput.click();
+
+      modal.querySelectorAll("[data-accent]").forEach(b => b.addEventListener("click", () => {
+        a.accent = b.dataset.accent;
+        modal.querySelectorAll("[data-accent]").forEach(x => x.classList.toggle("active", x === b));
+        const chip = modal.querySelector("#apCustom").parentNode.querySelector("i");
+        if (chip) chip.style.background = a.accent;
+        commit();
+      }));
+
+      const custom = modal.querySelector("#apCustom");
+      if (custom) custom.addEventListener("input", () => {
+        a.accent = custom.value;
+        modal.querySelectorAll("[data-accent]").forEach(x => x.classList.toggle("active", x.dataset.accent === a.accent));
+        const chip = custom.parentNode.querySelector("i");
+        if (chip) chip.style.background = a.accent;
+        commit();
       });
+
+      modal.querySelectorAll("[data-theme-val]").forEach(b => b.addEventListener("click", () => {
+        a.theme = b.dataset.themeVal;
+        modal.querySelectorAll("[data-theme-val]").forEach(x => x.classList.toggle("active", x === b));
+        commit();
+      }));
+
+      const preview = modal.querySelector("#wpPreview");
+      if (preview) {
+        const imgEl = modal.querySelector("#pImg");
+        const dimEl = modal.querySelector("#pDim");
+        const paint = () => {
+          if (imgEl) {
+            imgEl.style.backgroundPosition = a.wallX + "% " + a.wallY + "%";
+            imgEl.style.transformOrigin = a.wallX + "% " + a.wallY + "%";
+            imgEl.style.transform = "scale(" + a.wallScale + ")";
+            imgEl.style.filter = a.wallBlur > 0 ? "blur(" + a.wallBlur + "px)" : "none";
+          }
+          if (dimEl) dimEl.style.opacity = String(a.wallDim);
+        };
+        paint();
+
+        let drag = null;
+        preview.addEventListener("pointerdown", e => {
+          drag = { x: e.clientX, y: e.clientY, ox: a.wallX, oy: a.wallY };
+          try { preview.setPointerCapture(e.pointerId); } catch (err) {}
+          e.preventDefault();
+        });
+        preview.addEventListener("pointermove", e => {
+          if (!drag) return;
+          const w = preview.clientWidth || 1;
+          const h = preview.clientHeight || 1;
+          a.wallX = Math.round(clamp(drag.ox - ((e.clientX - drag.x) / w) * 100, 0, 100));
+          a.wallY = Math.round(clamp(drag.oy - ((e.clientY - drag.y) / h) * 100, 0, 100));
+          paint();
+          applyAppearance();
+        });
+        const endDrag = () => { if (!drag) return; drag = null; commit(); };
+        preview.addEventListener("pointerup", endDrag);
+        preview.addEventListener("pointercancel", endDrag);
+
+        const zoom = modal.querySelector("#apZoom");
+        zoom.addEventListener("input", () => {
+          a.wallScale = Number(zoom.value) / 100;
+          const out = modal.querySelector("#apZoomV");
+          if (out) out.textContent = a.wallScale.toFixed(1) + "\u00d7";
+          paint(); applyAppearance();
+        });
+        zoom.addEventListener("change", commit);
+
+        const dim = modal.querySelector("#apDim");
+        dim.addEventListener("input", () => {
+          a.wallDim = Number(dim.value) / 100;
+          const out = modal.querySelector("#apDimV");
+          if (out) out.textContent = Math.round(a.wallDim * 100) + "%";
+          paint(); applyAppearance();
+        });
+        dim.addEventListener("change", commit);
+
+        const blur = modal.querySelector("#apBlur");
+        blur.addEventListener("input", () => {
+          a.wallBlur = Number(blur.value);
+          const out = modal.querySelector("#apBlurV");
+          if (out) out.textContent = Math.round(a.wallBlur) + "px";
+          paint(); applyAppearance();
+        });
+        blur.addEventListener("change", commit);
+
+        modal.querySelector("#apRemove").addEventListener("click", () => {
+          a.wall = null;
+          commit();
+          openAppearanceSheet();
+          toast("Wallpaper removed");
+        });
+        modal.querySelector("#apChange").addEventListener("click", pick);
+      } else {
+        modal.querySelector("#apChoose").addEventListener("click", pick);
+      }
+
+      modal.querySelector("#apReset").addEventListener("click", () => {
+        mark();
+        state.app = Object.assign({}, DEFAULT_LOOK);
+        save();
+        applyAppearance();
+        openAppearanceSheet();
+        toast("Appearance reset");
+      });
+
+      modal.querySelector("#apClose").addEventListener("click", closeModal);
+
       fileInput.addEventListener("change", () => {
         const file = fileInput.files[0];
         if (!file) return;
@@ -820,17 +1103,18 @@ function openWallpaperSheet() {
         reader.onload = () => {
           const img = new Image();
           img.onload = () => {
-            const compressed = compressImage(img, 1280, 0.7);
-            snapshot();
-            state.wall = compressed;
-            save();
-            applyWallpaper();
-            closeModal();
-            render();
-            toast("Wallpaper set");
+            a.wall = compressImage(img, 1600, 0.74);
+            a.wallX = 50;
+            a.wallY = 50;
+            if (!(a.wallScale >= 1)) a.wallScale = 1;
+            commit();
+            openAppearanceSheet();
+            toast("Wallpaper set \u2014 drag it to reframe");
           };
+          img.onerror = () => toast("That image could not be loaded");
           img.src = reader.result;
         };
+        reader.onerror = () => toast("That file could not be read");
         reader.readAsDataURL(file);
       });
     });
@@ -1082,8 +1366,8 @@ window.addEventListener("hashchange", () => {
 
 // ===== boot =====
 document.addEventListener("gesturestart", e => e.preventDefault());
+applyAppearance();
 render();
-applyWallpaper();
 </script>
 </body>
 </html>
