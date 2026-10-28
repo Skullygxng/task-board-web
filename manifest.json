@@ -1,0 +1,16 @@
+{
+  "name": "Task Board",
+  "short_name": "Task Board",
+  "display": "standalone",
+  "background_color": "#f2f4f3",
+  "theme_color": "#0d9488",
+  "start_url": "./",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

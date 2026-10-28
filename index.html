@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Task Board">
+<title>Task Board</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<style>
+:root {
+  --accent: #0d9488;
+  --accent-soft: rgba(13, 148, 136, 0.14);
+  --bg: #f2f4f3;
+  --card: #ffffff;
+  --column: #e7ecea;
+  --text: #1b1f1e;
+  --muted: #6b7673;
+  --line: rgba(0, 0, 0, 0.09);
+  --danger: #e5484d;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101413;
+    --card: #1c2120;
+    --column: #242a29;
+    --text: #eef2f1;
+    --muted: #96a19e;
+    --line: rgba(255, 255, 255, 0.1);
+  }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+.icon-btn {
+  border: none; background: transparent; padding: 8px;
+  border-radius: 10px; color: var(--accent); display: inline-flex;
+}
+.icon-btn:disabled { color: var(--muted); opacity: 0.4; }
+.icon-btn.plain { color: var(--text); }
+
+.appbar {
+  position: sticky; top: 0; z-index: 10;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  padding: calc(env(safe-area-inset-top) + 8px) 16px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.appbar-row { display: flex; align-items: center; gap: 4px; }
+.appbar h1 {
+  margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.3px; flex: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bar-actions { display: flex; align-items: center; gap: 2px; }
+.appbar .search {
+  margin-top: 8px; width: 100%; padding: 9px 12px;
+  border-radius: 12px; border: 1px solid var(--line);
+  background: var(--card); color: var(--text); font: inherit; font-size: 15px;
+}
+
+.list { padding: 12px 16px 24px; display: flex; flex-direction: column; gap: 10px; }
+.section-label { font-size: 13px; font-weight: 700; color: var(--muted); padding: 12px 2px 0; text-transform: uppercase; letter-spacing: 0.4px; }
+.row {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  background: var(--card); border: none; border-radius: 16px; padding: 12px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+.row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.row-title { font-size: 16px; font-weight: 600; }
+.glyph {
+  width: 38px; height: 38px; border-radius: 50%; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); color: var(--accent); font-weight: 800; font-size: 16px;
+}
+.chev { color: var(--muted); font-size: 18px; }
+.counts { display: flex; gap: 10px; }
+.count { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
+.dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.tip { color: var(--muted); font-size: 12px; text-align: center; padding: 6px 24px 30px; }
+
+.board { display: flex; gap: 10px; padding: 12px; overflow-x: auto; align-items: flex-start; }
+.column {
+  background: var(--column); border-radius: 18px; padding: 10px;
+  flex: 0 0 292px; max-width: 84vw; min-height: 120px;
+}
+.col-head { display: flex; align-items: center; gap: 6px; padding: 4px 4px 10px; }
+.col-head .name { font-size: 14px; font-weight: 700; }
+.col-head .num {
+  font-size: 11px; font-weight: 700; color: var(--muted);
+  background: var(--card); border-radius: 999px; padding: 1px 8px;
+}
+.col-head .spacer { flex: 1; }
+.col-head .clear { border: none; background: transparent; color: var(--accent); font-size: 12px; font-weight: 700; padding: 4px 6px; }
+.cards { display: flex; flex-direction: column; gap: 8px; }
+.empty { text-align: center; color: var(--muted); font-size: 12px; padding: 22px 0; }
+
+.card {
+  background: var(--card); border-radius: 14px; padding: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07); text-align: left; width: 100%; border: none;
+}
+.chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+}
+.chip .dot { width: 6px; height: 6px; }
+.card-title { font-size: 14px; font-weight: 550; margin-top: 8px; white-space: pre-wrap; word-break: break-word; }
+.card-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; color: var(--muted); font-size: 11px; }
+.card-menu { border: none; background: var(--column); color: var(--text); width: 26px; height: 26px; border-radius: 50%; font-size: 15px; line-height: 1; }
+
+.quickbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 9; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); }
+.listen-hint {
+  display: none; align-items: center; gap: 6px; padding: 0 6px 6px;
+  color: var(--muted); font-size: 12px;
+}
+.listen-hint .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--danger); animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: 0.25; } }
+.quickbar-inner {
+  display: flex; gap: 8px; align-items: center;
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  border: 1px solid var(--line); border-radius: 24px; padding: 8px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.14);
+}
+.chip-btn { border: none; padding: 7px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; flex: none; }
+.quickbar input {
+  flex: 1; min-width: 0; border: none; background: transparent; color: var(--text);
+  font: inherit; font-size: 15px; padding: 6px 2px; resize: none;
+}
+.quickbar input:focus { outline: none; }
+.round-btn { width: 36px; height: 36px; border-radius: 50%; border: none; flex: none; display: flex; align-items: center; justify-content: center; }
+.mic { background: var(--accent-soft); color: var(--accent); }
+.mic.recording { background: var(--danger); color: #fff; }
+.add { background: var(--accent); color: #fff; }
+.add:disabled { background: var(--column); color: var(--muted); }
+
+#modal { position: fixed; inset: 0; z-index: 50; display: none; }
+#modal.open { display: block; }
+.backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.4); }
+.sheet {
+  position: absolute; bottom: 0; left: 0; right: 0; margin: 0 auto; max-width: 560px;
+  background: var(--card); border-radius: 22px 22px 0 0; max-height: 88dvh;
+  overflow-y: auto; padding: 8px 18px calc(18px + env(safe-area-inset-bottom));
+  animation: slide-up 0.22s ease-out;
+}
+@keyframes slide-up { from { transform: translateY(40px); opacity: 0.4; } }
+.grabber { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 6px auto 10px; }
+.sheet h2 { margin: 0 0 14px; font-size: 18px; font-weight: 800; }
+.field { margin-bottom: 14px; }
+.field > label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
+.field input, .field select, .field textarea {
+  width: 100%; padding: 11px 12px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--text); font: inherit; font-size: 15px;
+}
+.field textarea { resize: vertical; min-height: 64px; }
+.seg { display: flex; background: var(--column); border-radius: 11px; padding: 3px; gap: 3px; }
+.seg button { flex: 1; border: none; border-radius: 9px; padding: 9px 0; background: transparent; color: var(--muted); font-size: 13px; font-weight: 650; }
+.seg button.active { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+.sheet-actions { display: flex; gap: 10px; margin-top: 18px; }
+.btn { flex: 1; padding: 12px; border-radius: 12px; border: none; font-weight: 700; font-size: 15px; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-plain { background: var(--column); color: var(--text); }
+.btn-danger { background: transparent; color: var(--danger); flex: none; }
+.action-list { margin: 4px -6px 0; }
+.action {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 14px 10px; background: transparent; border: none; border-top: 1px solid var(--line); font-size: 15px;
+}
+.action:first-child { border-top: none; }
+.action.destructive { color: var(--danger); }
+.action .a-icon { width: 20px; display: inline-flex; justify-content: center; }
+.arc-row { display: flex; align-items: center; gap: 10px; padding: 12px 2px; border-bottom: 1px solid var(--line); }
+.arc-main { flex: 1; min-width: 0; }
+.arc-title { font-size: 14px; font-weight: 550; word-break: break-word; }
+.arc-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.small-btn { border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 7px 12px; font-size: 12px; font-weight: 700; flex: none; }
+.small-btn.danger { color: var(--danger); }
+
+#toast {
+  position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom));
+  transform: translateX(-50%) translateY(8px); background: #2b3130; color: #fff;
+  padding: 10px 16px; border-radius: 12px; font-size: 13px; opacity: 0;
+  pointer-events: none; transition: opacity 0.25s, transform 0.25s; z-index: 99; max-width: 86vw; text-align: center;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="modal"></div>
+<script>
+"use strict";
+
+// ===== constants =====
+const KEY = "taskboard.v1";
+const CATEGORIES = {
+  bug:     { label: "Bug",     color: "#e5484d" },
+  update:  { label: "Update",  color: "#e08c1a" },
+  project: { label: "Project", color: "#0d9488" },
+  note:    { label: "Note",    color: "#5b5bd6" }
+};
+const STATUSES = {
+  todo:       { label: "To Do",       color: "#3b82f6" },
+  inProgress: { label: "In Progress", color: "#f59e0b" },
+  done:       { label: "Done",        color: "#22a06b" }
+};
+const FOCI = {
+  thisWeek: { label: "This Week", color: "#d6409f" },
+  nextWeek: { label: "Next Week", color: "#8e4ec6" },
+  later:    { label: "Later",     color: "#0d9488" },
+  someday:  { label: "Someday",   color: "#8b8d98" }
+};
+
+const I = {
+  back: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  undo: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3.5 13a9 9 0 1 0 2.6-7L3 7.5"/></svg>',
+  dots: '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>',
+  mic: '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" stroke="none"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a1 1 0 1 0-2 0 5 5 0 0 1-10 0 1 1 0 1 0-2 0 7 7 0 0 0 6 6.92V21h-2a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-3.08A7 7 0 0 0 19 11z"/></svg>',
+  up: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
+  filter: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>',
+  x: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>',
+  tray: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h5l2 3h4l2-3h5"/><path d="M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></svg>',
+  archive: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>',
+  export_: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>',
+  restore: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3.5 13a9 9 0 1 0 2.6-7L3 7.5"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
+  pencil: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3l4 4L8 20l-5 1 1-5z"/></svg>',
+  copy: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
+  move: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
+};
+
+// ===== state =====
+let state = loadState();
+const undoStack = [];
+let draft = "";
+let manualCategory = null;
+let boardSearch = "";
+let searchActive = false;
+let categoryFilter = null;
+let focusFilter = null;
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) {
+      const s = JSON.parse(raw);
+      if (s && Array.isArray(s.tasks) && Array.isArray(s.projects)) return s;
+    }
+  } catch (e) {}
+  return { projects: [], tasks: [] };
+}
+function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+function snapshot() {
+  undoStack.push(JSON.stringify(state));
+  if (undoStack.length > 30) undoStack.shift();
+  updateUndoButtons();
+}
+function undo() {
+  if (!undoStack.length) return;
+  state = JSON.parse(undoStack.pop());
+  save();
+  render();
+}
+function updateUndoButtons() {
+  document.querySelectorAll("[data-action='undo']").forEach(b => { b.disabled = !undoStack.length; });
+}
+
+// ===== helpers =====
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "id-" + Date.now() + "-" + Math.random().toString(36).slice(2));
+const fmtDate = ts => new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+function detectCategory(text) {
+  const t = text.toLowerCase();
+  const bugWords = ["bug", "fix", "broken", "crash", "error", "issue", "glitch", "fails", "wrong"];
+  const updateWords = ["update", "upgrade", "improve", "refresh", "polish", "tweak", "revise", "redo"];
+  const projectWords = ["project", "build", "create", "start", "launch", "ship", "feature"];
+  if (bugWords.some(w => t.includes(w))) return "bug";
+  if (updateWords.some(w => t.includes(w))) return "update";
+  if (projectWords.some(w => t.includes(w))) return "project";
+  return "note";
+}
+
+const activeCategory = () => manualCategory || detectCategory(draft);
+
+const scoped = pid => state.tasks.filter(t => !t.archived && t.projectID === pid);
+function visibleTasks(pid) {
+  return scoped(pid).filter(t => {
+    if (categoryFilter && t.category !== categoryFilter) return false;
+    if (focusFilter && t.focus !== focusFilter) return false;
+    if (boardSearch && !t.title.toLowerCase().includes(boardSearch.toLowerCase())) return false;
+    return true;
+  });
+}
+function countsHtml(pid) {
+  const tasks = scoped(pid);
+  return '<span class="counts">' + Object.keys(STATUSES).map(k =>
+    '<span class="count"><i class="dot" style="background:' + STATUSES[k].color + '"></i>' +
+    tasks.filter(t => t.status === k).length + '</span>').join("") + '</span>';
+}
+const chip = (info, text) =>
+  '<span class="chip" style="color:' + info.color + ';background:' + info.color + '22">' +
+  '<i class="dot" style="background:' + info.color + '"></i>' + esc(text) + '</span>';
+
+// ===== routing =====
+function route() {
+  const h = location.hash;
+  if (h.startsWith("#board/")) {
+    const id = h.slice(7);
+    return { view: "board", projectId: id === "general" ? null : id };
+  }
+  return { view: "home" };
+}
+
+function render() {
+  const app = document.getElementById("app");
+  const r = route();
+  if (r.view === "board") {
+    if (r.projectId && !state.projects.some(p => p.id === r.projectId)) { location.hash = "#home"; return; }
+    renderBoard(app, r.projectId);
+  } else {
+    renderHome(app);
+  }
+  updateUndoButtons();
+}
+
+// ===== home view =====
+function renderHome(app) {
+  searchActive = false;
+  const rows = [
+    '<button class="row" data-action="open-board" data-id="general">' +
+      '<span class="glyph">' + I.tray + '</span>' +
+      '<span class="row-main"><span class="row-title">General</span>' + countsHtml(null) + '</span>' +
+      '<span class="chev">&#8250;</span></button>'
+  ];
+  rows.push('<div class="section-label">Projects</div>');
+  if (!state.projects.length) {
+    rows.push('<div class="empty" style="padding:8px 0">No projects yet — tap + to add one, like Easy Chain.</div>');
+  }
+  state.projects.forEach(p => {
+    rows.push(
+      '<div class="row" style="padding-right:6px">' +
+        '<button class="row" style="all:unset;cursor:pointer;display:flex;align-items:center;gap:12px;flex:1;min-width:0" data-action="open-board" data-id="' + p.id + '">' +
+          '<span class="glyph">' + esc(p.name.trim().charAt(0).toUpperCase() || "?") + '</span>' +
+          '<span class="row-main"><span class="row-title">' + esc(p.name) + '</span>' + countsHtml(p.id) + '</span>' +
+          '<span class="chev">&#8250;</span>' +
+        '</button>' +
+        '<button class="icon-btn plain" data-action="project-menu" data-id="' + p.id + '">' + I.dots + '</button>' +
+      '</div>');
+  });
+  app.innerHTML =
+    '<header class="appbar"><div class="appbar-row">' +
+      '<h1>My Boards</h1>' +
+      '<div class="bar-actions">' +
+        '<button class="icon-btn" data-action="undo" title="Undo">' + I.undo + '</button>' +
+        '<button class="icon-btn" data-action="new-project" title="New project">' + I.plus + '</button>' +
+        '<button class="icon-btn plain" data-action="home-menu" title="More">' + I.dots + '</button>' +
+      '</div>' +
+    '</div></header>' +
+    '<div class="list">' + rows.join("") + '</div>' +
+    '<div class="tip">Tip: in Safari, use Share &rarr; Add to Home Screen to use Task Board like an app.</div>';
+}
+
+// ===== board view =====
+function renderBoard(app, projectId) {
+  const project = projectId ? state.projects.find(p => p.id === projectId) : null;
+  const title = project ? project.name : "General";
+  const tasks = visibleTasks(projectId);
+  const activeFilters = !!(categoryFilter || focusFilter || boardSearch);
+
+  const columns = Object.keys(STATUSES).map(sk => {
+    const items = tasks.filter(t => t.status === sk);
+    const cards = items.map(t => {
+      const c = CATEGORIES[t.category] || CATEGORIES.note;
+      const f = t.focus ? FOCI[t.focus] : null;
+      return (
+        '<div class="card" data-action="open-task" data-id="' + t.id + '">' +
+          '<div class="chip-row">' + chip(c, c.label) + (f ? chip(f, f.label) : "") + '</div>' +
+          '<div class="card-title">' + esc(t.title) + '</div>' +
+          '<div class="card-foot"><span>' + fmtDate(t.createdAt) + '</span>' +
+          '<button class="card-menu" data-action="task-menu" data-id="' + t.id + '">&#8943;</button></div>' +
+        '</div>');
+    }).join("");
+    return (
+      '<div class="column">' +
+        '<div class="col-head">' +
+          '<i class="dot" style="background:' + STATUSES[sk].color + '"></i>' +
+          '<span class="name">' + STATUSES[sk].label + '</span>' +
+          '<span class="num">' + items.length + '</span>' +
+          '<span class="spacer"></span>' +
+          (sk === "done" && items.length
+            ? '<button class="clear" data-action="clear-done" data-pid="' + (projectId || "") + '">Clear</button>'
+            : "") +
+        '</div>' +
+        '<div class="cards">' +
+          (cards || '<div class="empty">Nothing here yet</div>') +
+        '</div>' +
+      '</div>');
+  }).join("");
+
+  const cat = CATEGORIES[activeCategory()];
+  app.innerHTML =
+    '<header class="appbar">' +
+      '<div class="appbar-row">' +
+        '<button class="icon-btn plain" data-action="go-home">' + I.back + '</button>' +
+        '<h1>' + esc(title) + '</h1>' +
+        '<button class="icon-btn" data-action="undo" title="Undo">' + I.undo + '</button>' +
+        '<button class="icon-btn' + (activeFilters ? "" : " plain") + '" data-action="open-filters" title="Filters">' + I.filter + '</button>' +
+      '</div>' +
+      '<input id="searchInput" class="search" type="search" placeholder="Search tasks" value="' + esc(boardSearch) + '">' +
+    '</header>' +
+    '<div class="board">' + columns + '</div>' +
+    '<div class="quickbar">' +
+      '<div class="listen-hint" id="listenHint"><span class="pulse"></span>Listening&hellip; tap the mic to stop</div>' +
+      '<div class="quickbar-inner">' +
+        '<button class="chip-btn" id="catChip" data-action="cycle-category" style="color:' + cat.color + ';background:' + cat.color + '22">' +
+          '<i class="dot" style="background:' + cat.color + '"></i><span>' + cat.label + '</span>' +
+        '</button>' +
+        '<input id="draftInput" type="text" placeholder="Add a task&hellip;" value="' + esc(draft) + '" autocomplete="off">' +
+        '<button class="round-btn mic' + (isListening ? " recording" : "") + '" id="micBtn" data-action="toggle-mic" title="Dictate">' + I.mic + '</button>' +
+        '<button class="round-btn add" id="addBtn" data-action="add-task" title="Add"' + (draft.trim() ? "" : " disabled") + '>' + I.up + '</button>' +
+      '</div>' +
+    '</div>';
+
+  const input = document.getElementById("draftInput");
+  input.addEventListener("input", e => {
+    draft = e.target.value;
+    document.getElementById("addBtn").disabled = !draft.trim();
+  });
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addTask(projectId); }
+  });
+  input.addEventListener("blur", () => { draft = input.value; });
+  const search = document.getElementById("searchInput");
+  search.addEventListener("input", e => {
+    boardSearch = e.target.value;
+    searchActive = true;
+    render();
+  });
+  if (searchActive) {
+    search.focus();
+    search.setSelectionRange(search.value.length, search.value.length);
+  } else {
+    boardSearch = "";
+  }
+  input.focus();
+}
+
+// ===== modals =====
+function showModal(html, wire) {
+  const modal = document.getElementById("modal");
+  modal.innerHTML = '<div class="backdrop" data-close="1"></div><div class="sheet"><div class="grabber"></div>' + html + '</div>';
+  modal.classList.add("open");
+  modal.querySelector(".backdrop").addEventListener("click", closeModal);
+  if (wire) wire(modal);
+}
+function closeModal() {
+  const modal = document.getElementById("modal");
+  modal.classList.remove("open");
+  modal.innerHTML = "";
+}
+
+function openTaskModal(taskId) {
+  const t = state.tasks.find(x => x.id === taskId);
+  if (!t) return;
+  const d = { title: t.title, status: t.status, category: t.category, projectID: t.projectID || "", focus: t.focus || "" };
+  const projectOptions = ['<option value=""' + (d.projectID === "" ? " selected" : "") + '>General</option>']
+    .concat(state.projects.map(p => '<option value="' + p.id + '"' + (p.id === d.projectID ? " selected" : "") + '>' + esc(p.name) + '</option>'))
+    .join("");
+  const focusOptions = ['<option value=""' + (d.focus === "" ? " selected" : "") + '>None</option>']
+    .concat(Object.keys(FOCI).map(k => '<option value="' + k + '"' + (k === d.focus ? " selected" : "") + '>' + FOCI[k].label + '</option>'))
+    .join("");
+  const seg = (key, defs, current) =>
+    '<div class="seg">' + Object.keys(defs).map(k =>
+      '<button type="button" data-seg="' + key + '" data-val="' + k + '" class="' + (current === k ? "active" : "") + '">' + defs[k].label + '</button>'
+    ).join("") + '</div>';
+
+  showModal(
+    '<h2>Edit Task</h2>' +
+    '<div class="field"><label>Title</label><textarea id="tmTitle">' + esc(d.title) + '</textarea></div>' +
+    '<div class="field"><label>Status</label>' + seg("status", STATUSES, d.status) + '</div>' +
+    '<div class="field"><label>Board</label><select id="tmProject">' + projectOptions + '</select></div>' +
+    '<div class="field"><label>Category</label>' + seg("category", CATEGORIES, d.category) + '</div>' +
+    '<div class="field"><label>Focus</label><select id="tmFocus">' + focusOptions + '</select></div>' +
+    '<div class="sheet-actions">' +
+      '<button class="btn btn-danger" id="tmDelete">Delete</button>' +
+      '<button class="btn btn-primary" id="tmDone">Done</button>' +
+    '</div>',
+    modal => {
+      modal.querySelector("#tmTitle").addEventListener("input", e => { d.title = e.target.value; });
+      modal.querySelectorAll("[data-seg]").forEach(b => b.addEventListener("click", () => {
+        d[b.dataset.seg] = b.dataset.val;
+        modal.querySelectorAll('[data-seg="' + b.dataset.seg + '"]').forEach(x => x.classList.toggle("active", x === b));
+      }));
+      modal.querySelector("#tmProject").addEventListener("change", e => { d.projectID = e.target.value || null; });
+      modal.querySelector("#tmFocus").addEventListener("change", e => { d.focus = e.target.value || null; });
+      modal.querySelector("#tmDelete").addEventListener("click", () => deleteTask(t.id));
+      modal.querySelector("#tmDone").addEventListener("click", () => {
+        snapshot();
+        t.title = d.title.trim() || t.title;
+        t.status = d.status;
+        t.category = d.category;
+        t.projectID = d.projectID;
+        t.focus = d.focus;
+        save();
+        closeModal();
+        render();
+      });
+    });
+}
+
+function openTaskSheet(taskId) {
+  const t = state.tasks.find(x => x.id === taskId);
+  if (!t) return;
+  const moves = Object.keys(STATUSES).filter(k => k !== t.status).map(k =>
+    '<button class="action" data-moveto="' + k + '"><span class="a-icon"><i class="dot" style="background:' + STATUSES[k].color + '"></i></span>Move to ' + STATUSES[k].label + '</button>'
+  ).join("");
+  showModal(
+    '<h2 style="font-size:15px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(t.title) + '</h2>' +
+    '<div class="action-list">' + moves +
+      '<button class="action" data-sheet="duplicate"><span class="a-icon">' + I.copy + '</span>Duplicate</button>' +
+      '<button class="action" data-sheet="edit"><span class="a-icon">' + I.pencil + '</span>Edit details</button>' +
+      '<button class="action destructive" data-sheet="delete"><span class="a-icon">' + I.trash + '</span>Delete</button>' +
+    '</div>',
+    modal => {
+      modal.querySelectorAll("[data-moveto]").forEach(b => b.addEventListener("click", () => {
+        snapshot();
+        t.status = b.dataset.moveto;
+        save(); closeModal(); render();
+      }));
+      modal.querySelector('[data-sheet="duplicate"]').addEventListener("click", () => duplicateTask(t.id));
+      modal.querySelector('[data-sheet="edit"]').addEventListener("click", () => openTaskModal(t.id));
+      modal.querySelector('[data-sheet="delete"]').addEventListener("click", () => deleteTask(t.id));
+    });
+}
+
+function openProjectModal(project, isRename) {
+  showModal(
+    '<h2>' + (isRename ? "Rename Project" : "New Project") + '</h2>' +
+    '<div class="field"><label>Project name</label><input id="pjName" type="text" placeholder="e.g. Easy Chain" value="' + esc(project ? project.name : "") + '"></div>' +
+    '<div class="sheet-actions"><button class="btn btn-primary" id="pjSave">' + (isRename ? "Save" : "Create") + '</button></div>',
+    modal => {
+      const input = modal.querySelector("#pjName");
+      input.focus();
+      input.addEventListener("keydown", e => { if (e.key === "Enter") modal.querySelector("#pjSave").click(); });
+      modal.querySelector("#pjSave").addEventListener("click", () => {
+        const name = input.value.trim();
+        if (!name) { toast("Give the project a name first"); return; }
+        if (isRename) {
+          snapshot();
+          project.name = name;
+        } else {
+          snapshot();
+          state.projects.push({ id: uid(), name: name, createdAt: Date.now() });
+        }
+        save();
+        closeModal();
+        render();
+      });
+    });
+}
+
+function openProjectSheet(projectId) {
+  const p = state.projects.find(x => x.id === projectId);
+  if (!p) return;
+  showModal(
+    '<h2>' + esc(p.name) + '</h2>' +
+    '<div class="action-list">' +
+      '<button class="action" data-pj="rename"><span class="a-icon">' + I.pencil + '</span>Rename</button>' +
+      '<button class="action destructive" data-pj="del-keep"><span class="a-icon">' + I.trash + '</span>Delete project, move tasks to General</button>' +
+      '<button class="action destructive" data-pj="del-tasks"><span class="a-icon">' + I.trash + '</span>Delete project and its tasks</button>' +
+    '</div>',
+    modal => {
+      modal.querySelector('[data-pj="rename"]').addEventListener("click", () => openProjectModal(p, true));
+      modal.querySelector('[data-pj="del-keep"]').addEventListener("click", () => deleteProject(p.id, false));
+      modal.querySelector('[data-pj="del-tasks"]').addEventListener("click", () => deleteProject(p.id, true));
+    });
+}
+
+function openFilterSheet() {
+  const catOptions = ['<option value=""' + (!categoryFilter ? " selected" : "") + '>All categories</option>']
+    .concat(Object.keys(CATEGORIES).map(k => '<option value="' + k + '"' + (k === categoryFilter ? " selected" : "") + '>' + CATEGORIES[k].label + '</option>'))
+    .join("");
+  const focusOptions = ['<option value=""' + (!focusFilter ? " selected" : "") + '>Any time</option>']
+    .concat(Object.keys(FOCI).map(k => '<option value="' + k + '"' + (k === focusFilter ? " selected" : "") + '>' + FOCI[k].label + '</option>'))
+    .join("");
+  showModal(
+    '<h2>Filters</h2>' +
+    '<div class="field"><label>Category</label><select id="fCat">' + catOptions + '</select></div>' +
+    '<div class="field"><label>Focus</label><select id="fFocus">' + focusOptions + '</select></div>' +
+    '<div class="sheet-actions"><button class="btn btn-plain" id="fClear">Clear</button><button class="btn btn-primary" id="fApply">Apply</button></div>',
+    modal => {
+      modal.querySelector("#fApply").addEventListener("click", () => {
+        categoryFilter = modal.querySelector("#fCat").value || null;
+        focusFilter = modal.querySelector("#fFocus").value || null;
+        closeModal();
+        render();
+      });
+      modal.querySelector("#fClear").addEventListener("click", () => {
+        categoryFilter = null; focusFilter = null; boardSearch = "";
+        closeModal(); render();
+      });
+    });
+}
+
+function openArchive() {
+  const archived = state.tasks.filter(t => t.archived);
+  const rows = archived.length
+    ? archived.map(t => {
+        const projName = t.projectID
+          ? (state.projects.find(p => p.id === t.projectID) || {}).name || "General"
+          : "General";
+        return (
+          '<div class="arc-row"><div class="arc-main">' +
+            '<div class="arc-title">' + esc(t.title) + '</div>' +
+            '<div class="arc-meta">' + CATEGORIES[t.category].label + ' · ' + STATUSES[t.status].label + ' · ' + esc(projName) + '</div>' +
+          '</div>' +
+          '<button class="small-btn" data-action="restore" data-id="' + t.id + '">Restore</button>' +
+          '<button class="small-btn danger" data-action="purge" data-id="' + t.id + '">Delete</button></div>');
+      }).join("")
+    : '<div class="empty">Tasks you clear from the Done column land here.</div>';
+  showModal('<h2>Archive</h2>' + rows, () => {});
+}
+
+function openHomeMenu() {
+  showModal(
+    '<h2>More</h2>' +
+    '<div class="action-list">' +
+      '<button class="action" data-hm="archive"><span class="a-icon">' + I.archive + '</span>Archive</button>' +
+      '<button class="action" data-hm="md"><span class="a-icon">' + I.export_ + '</span>Export as Markdown</button>' +
+      '<button class="action" data-hm="backup"><span class="a-icon">' + I.export_ + '</span>Download backup (.json)</button>' +
+      '<button class="action" data-hm="restore"><span class="a-icon">' + I.restore + '</span>Restore backup</button>' +
+    '</div>' +
+    '<input type="file" id="importFile" accept=".json,application/json" style="display:none">',
+    modal => {
+      modal.querySelector('[data-hm="archive"]').addEventListener("click", openArchive);
+      modal.querySelector('[data-hm="md"]').addEventListener("click", () => {
+        download("task-board.md", exportMarkdown(), "text/markdown");
+        closeModal();
+      });
+      modal.querySelector('[data-hm="backup"]').addEventListener("click", () => {
+        download("task-board-backup.json", JSON.stringify(state, null, 2), "application/json");
+        closeModal();
+      });
+      const fileInput = modal.querySelector("#importFile");
+      modal.querySelector('[data-hm="restore"]').addEventListener("click", () => fileInput.click());
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const parsed = JSON.parse(reader.result);
+            if (!parsed || !Array.isArray(parsed.tasks) || !Array.isArray(parsed.projects)) throw new Error("bad");
+            snapshot();
+            state = parsed;
+            save();
+            closeModal();
+            render();
+            toast("Backup restored");
+          } catch (e) {
+            toast("That file isn't a Task Board backup");
+          }
+        };
+        reader.readAsText(file);
+      });
+    });
+}
+
+// ===== actions =====
+function addTask(projectId) {
+  const title = draft.trim();
+  if (!title) return;
+  snapshot();
+  state.tasks.unshift({
+    id: uid(), title: title,
+    category: activeCategory(), status: "todo",
+    projectID: projectId, focus: null,
+    archived: false, createdAt: Date.now()
+  });
+  draft = "";
+  manualCategory = null;
+  save();
+  render();
+}
+function deleteTask(id) {
+  const t = state.tasks.find(x => x.id === id);
+  if (!t) return;
+  snapshot();
+  state.tasks = state.tasks.filter(x => x.id !== id);
+  save();
+  closeModal();
+  render();
+  toast("Deleted — tap undo to restore");
+}
+function duplicateTask(task) {
+  snapshot();
+  const copy = {
+    id: uid(), title: task.title, category: task.category, status: task.status,
+    projectID: task.projectID, focus: task.focus, archived: false, createdAt: Date.now()
+  };
+  const idx = state.tasks.findIndex(x => x.id === task.id);
+  state.tasks.splice(idx < 0 ? 0 : idx + 1, 0, copy);
+  save();
+  closeModal();
+  render();
+  toast("Task duplicated");
+}
+function clearDone(projectId) {
+  const targets = state.tasks.filter(t => !t.archived && t.status === "done" && t.projectID === projectId);
+  if (!targets.length) return;
+  snapshot();
+  targets.forEach(t => { t.archived = true; });
+  save();
+  render();
+  toast("Archived " + targets.length + " task" + (targets.length === 1 ? "" : "s") + " — undo available");
+}
+function restoreTask(id) {
+  const t = state.tasks.find(x => x.id === id);
+  if (!t) return;
+  snapshot();
+  t.archived = false;
+  save();
+  closeModal();
+  render();
+}
+function purgeTask(id) {
+  const t = state.tasks.find(x => x.id === id);
+  if (!t) return;
+  snapshot();
+  state.tasks = state.tasks.filter(x => x.id !== id);
+  save();
+  closeModal();
+  render();
+}
+function deleteProject(id, deleteTasks) {
+  snapshot();
+  state.projects = state.projects.filter(p => p.id !== id);
+  if (deleteTasks) {
+    state.tasks = state.tasks.filter(t => t.projectID !== id);
+  } else {
+    state.tasks.forEach(t => { if (t.projectID === id) t.projectID = null; });
+  }
+  save();
+  closeModal();
+  if (location.hash !== "#home") { location.hash = "#home"; } else { render(); }
+}
+function cycleCategory() {
+  const order = Object.keys(CATEGORIES);
+  if (manualCategory) {
+    const i = order.indexOf(manualCategory);
+    manualCategory = i === order.length - 1 ? null : order[i + 1];
+  } else {
+    manualCategory = order[0];
+  }
+  const cat = CATEGORIES[activeCategory()];
+  const chipEl = document.getElementById("catChip");
+  if (chipEl) {
+    chipEl.style.color = cat.color;
+    chipEl.style.background = cat.color + "22";
+    chipEl.querySelector("i").style.background = cat.color;
+    chipEl.querySelector("span").textContent = cat.label;
+  }
+}
+
+// ===== export =====
+function exportMarkdown() {
+  const lines = ["# Task Board", ""];
+  const writeBoard = (name, pid) => {
+    const active = state.tasks.filter(t => !t.archived && t.projectID === pid);
+    if (!active.length) return;
+    lines.push("## " + name, "");
+    Object.keys(STATUSES).forEach(sk => {
+      const items = active.filter(t => t.status === sk);
+      if (!items.length) return;
+      lines.push("### " + STATUSES[sk].label);
+      items.forEach(t => lines.push("- [" + (sk === "done" ? "x" : " ") + "] " + t.title + " (" + CATEGORIES[t.category].label + ")"));
+      lines.push("");
+    });
+  };
+  writeBoard("General", null);
+  state.projects.forEach(p => writeBoard(p.name, p.id));
+  return lines.join("\n");
+}
+function download(name, text, mime) {
+  const blob = new Blob([text], { type: mime });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ===== voice =====
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let isListening = false;
+
+function setListening(b) {
+  isListening = b;
+  const hint = document.getElementById("listenHint");
+  const mic = document.getElementById("micBtn");
+  if (hint) hint.style.display = b ? "flex" : "none";
+  if (mic) mic.classList.toggle("recording", b);
+}
+function toggleMic() {
+  if (!SpeechRec) {
+    toast("Voice input needs Safari or Chrome — or tap the mic on your keyboard to dictate");
+    return;
+  }
+  if (isListening) { recognition.stop(); return; }
+  recognition = new SpeechRec();
+  recognition.lang = navigator.language || "en-US";
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  let finalText = "";
+  recognition.onresult = e => {
+    let interim = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const text = e.results[i][0].transcript;
+      if (e.results[i].isFinal) finalText += text + " ";
+      else interim += text;
+    }
+    draft = (finalText + interim).trim();
+    const input = document.getElementById("draftInput");
+    if (input) {
+      input.value = draft;
+      document.getElementById("addBtn").disabled = !draft.trim();
+    }
+  };
+  recognition.onend = () => setListening(false);
+  recognition.onerror = e => {
+    setListening(false);
+    if (e.error && e.error !== "aborted" && e.error !== "no-speech") toast("Listening stopped: " + e.error);
+  };
+  try {
+    recognition.start();
+    setListening(true);
+  } catch (err) {
+    toast("Couldn't start listening");
+  }
+}
+
+// ===== toast =====
+let toastTimer = null;
+function toast(msg) {
+  let el = document.getElementById("toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "toast";
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+}
+
+// ===== global events =====
+document.addEventListener("click", e => {
+  const el = e.target.closest("[data-action]");
+  if (!el || el.disabled) return;
+  const r = route();
+  const pid = r.view === "board" ? r.projectId : null;
+  switch (el.dataset.action) {
+    case "open-board":
+      location.hash = "#board/" + el.dataset.id;
+      break;
+    case "go-home":
+      categoryFilter = null; focusFilter = null; boardSearch = ""; searchActive = false;
+      location.hash = "#home";
+      break;
+    case "undo": undo(); break;
+    case "new-project": openProjectModal(null, false); break;
+    case "home-menu": openHomeMenu(); break;
+    case "project-menu": openProjectSheet(el.dataset.id); break;
+    case "open-task": openTaskModal(el.dataset.id); break;
+    case "task-menu": openTaskSheet(el.dataset.id); break;
+    case "add-task": addTask(pid); break;
+    case "cycle-category": cycleCategory(); break;
+    case "toggle-mic": toggleMic(); break;
+    case "clear-done": clearDone(el.dataset.pid || null); break;
+    case "open-filters": openFilterSheet(); break;
+    case "restore": restoreTask(el.dataset.id); break;
+    case "purge": purgeTask(el.dataset.id); break;
+  }
+});
+window.addEventListener("hashchange", () => {
+  if (isListening && recognition) recognition.stop();
+  categoryFilter = null;
+  focusFilter = null;
+  boardSearch = "";
+  searchActive = false;
+  render();
+});
+
+// ===== boot =====
+render();
+</script>
+</body>
+</html>
