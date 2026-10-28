@@ -25,11 +25,6 @@
   --shadow-float: 0 2px 6px rgba(34, 33, 30, 0.08), 0 14px 38px rgba(34, 33, 30, 0.16);
   --serif: ui-serif, "New York", Georgia, serif;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --wall-dim: 0.72;
-  --wall-blur: 0px;
-  --wall-scale: 1;
-  --wall-x: 50%;
-  --wall-y: 50%;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -65,32 +60,11 @@ html, body { height: 100%; }
 body {
   margin: 0;
   font-family: var(--sans);
-  background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   touch-action: pan-x pan-y;
+  background: transparent;
 }
-body.has-wall { background: transparent; }
-#wall {
-  position: fixed; left: 0; right: 0; top: -6vh;
-  height: calc(100vh + 12vh);
-  height: calc(100dvh + 12vh);
-  height: calc(100lvh + 12vh);
-  min-height: calc(100vh + 12vh);
-  z-index: -2; overflow: hidden; background: var(--bg); display: none;
-}
-body.has-wall #wall { display: block; }
-#wall .w-img {
-  position: absolute; inset: calc(var(--wall-blur) * -2);
-  background-image: var(--wall-img);
-  background-size: cover; background-repeat: no-repeat;
-  background-position: var(--wall-x) var(--wall-y);
-  transform: scale(var(--wall-scale));
-  transform-origin: var(--wall-x) var(--wall-y);
-  filter: blur(var(--wall-blur));
-  will-change: transform, filter;
-}
-#wall .w-dim { position: absolute; inset: 0; background: var(--bg); opacity: var(--wall-dim); }
 button { font: inherit; color: inherit; cursor: pointer; }
 button:active { opacity: 0.85; }
 
@@ -313,7 +287,7 @@ button:active { opacity: 0.85; }
 }
 .wp-preview .p-img {
   position: absolute; inset: -16px;
-  background-image: var(--wall-img);
+  background-image: var(--wall-src, none);
   background-size: cover; background-repeat: no-repeat; background-position: 50% 50%;
 }
 .wp-preview .p-dim { position: absolute; inset: 0; background: var(--bg); opacity: 0.72; }
@@ -351,7 +325,6 @@ button:active { opacity: 0.85; }
 </style>
 </head>
 <body>
-<div id="wall" aria-hidden="true"><div class="w-img"></div><div class="w-dim"></div></div>
 <div id="app"></div>
 <div id="modal"></div>
 <script>
@@ -451,6 +424,94 @@ function hexToRgba(hex, alpha) {
   return "rgba(" + ((n >> 16) & 255) + ", " + ((n >> 8) & 255) + ", " + (n & 255) + ", " + alpha + ")";
 }
 
+let wallImgCache = { src: "", el: null };
+let wallComposedKey = "";
+let wallComposedUrl = "";
+let wallPendingKey = "";
+
+/* Bakes the photo, zoom, focal point, blur and tint into one image that is
+   painted as the page's own root background, so it always fills the screen. */
+function composeWallpaper(a, img, bg) {
+  const maxEdge = 1800;
+  const aspect = Math.max(0.2, Math.min(5, window.innerWidth / Math.max(1, window.innerHeight)));
+  let W, H;
+  if (aspect >= 1) { W = maxEdge; H = Math.round(maxEdge / aspect); }
+  else { H = maxEdge; W = Math.round(maxEdge * aspect); }
+  W = Math.max(2, W); H = Math.max(2, H);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  const scale = Math.max(W / img.width, H / img.height) * a.wallScale;
+  const dw = img.width * scale;
+  const dh = img.height * scale;
+  const x = (W - dw) * (a.wallX / 100);
+  const y = (H - dh) * (a.wallY / 100);
+  ctx.drawImage(img, x, y, dw, dh);
+
+  let out = canvas;
+  if (a.wallBlur > 0) {
+    const k = Math.max(0.03, 1 / (1 + a.wallBlur * 0.85));
+    const small = document.createElement("canvas");
+    small.width = Math.max(4, Math.round(W * k));
+    small.height = Math.max(4, Math.round(H * k));
+    const sctx = small.getContext("2d");
+    sctx.imageSmoothingEnabled = true;
+    sctx.imageSmoothingQuality = "high";
+    sctx.drawImage(canvas, 0, 0, small.width, small.height);
+
+    const smooth = document.createElement("canvas");
+    smooth.width = W; smooth.height = H;
+    const bctx = smooth.getContext("2d");
+    bctx.imageSmoothingEnabled = true;
+    bctx.imageSmoothingQuality = "high";
+    bctx.drawImage(small, 0, 0, W, H);
+    out = smooth;
+  }
+
+  if (a.wallDim > 0) {
+    const octx = out.getContext("2d");
+    octx.globalAlpha = a.wallDim;
+    octx.fillStyle = bg;
+    octx.fillRect(0, 0, W, H);
+    octx.globalAlpha = 1;
+  }
+  return out.toDataURL("image/jpeg", 0.84);
+}
+
+function paintWallpaper(a) {
+  const root = document.documentElement;
+  const bg = (getComputedStyle(root).getPropertyValue("--bg") || "").trim() || "#faf8f4";
+  const key = [a.wall.length, a.wallScale, a.wallX, a.wallY, a.wallBlur, a.wallDim, bg, window.innerWidth, window.innerHeight].join("|");
+  if (wallComposedKey === key && wallComposedUrl) return;
+  if (wallPendingKey === key) return;
+  wallPendingKey = key;
+
+  const paint = img => {
+    wallPendingKey = "";
+    if (appearance().wall !== a.wall) return;
+    try {
+      const url = composeWallpaper(a, img, bg);
+      wallComposedKey = key;
+      wallComposedUrl = url;
+      root.style.setProperty("--wall-img", 'url("' + url + '")');
+    } catch (err) {
+      root.style.setProperty("--wall-img", 'url("' + a.wall + '")');
+    }
+  };
+
+  if (wallImgCache.el && wallImgCache.src === a.wall) { paint(wallImgCache.el); return; }
+  const el = new Image();
+  el.onload = () => { wallImgCache = { src: a.wall, el: el }; paint(el); };
+  el.onerror = () => { wallPendingKey = ""; };
+  el.src = a.wall;
+}
+
 function applyAppearance() {
   const a = appearance();
   const root = document.documentElement;
@@ -464,15 +525,12 @@ function applyAppearance() {
     root.style.removeProperty("--accent-soft");
   }
   if (a.wall) {
-    document.body.classList.add("has-wall");
-    root.style.setProperty("--wall-img", 'url("' + a.wall + '")');
-    root.style.setProperty("--wall-dim", String(a.wallDim));
-    root.style.setProperty("--wall-blur", a.wallBlur + "px");
-    root.style.setProperty("--wall-scale", String(a.wallScale));
-    root.style.setProperty("--wall-x", a.wallX + "%");
-    root.style.setProperty("--wall-y", a.wallY + "%");
+    root.style.setProperty("--wall-src", 'url("' + a.wall + '")');
+    paintWallpaper(a);
   } else {
-    document.body.classList.remove("has-wall");
+    wallComposedKey = "";
+    wallComposedUrl = "";
+    root.style.removeProperty("--wall-src");
     root.style.removeProperty("--wall-img");
   }
 }
@@ -1053,7 +1111,6 @@ function openAppearanceSheet() {
           a.wallX = Math.round(clamp(drag.ox - ((e.clientX - drag.x) / w) * 100, 0, 100));
           a.wallY = Math.round(clamp(drag.oy - ((e.clientY - drag.y) / h) * 100, 0, 100));
           paint();
-          applyAppearance();
         });
         const endDrag = () => { if (!drag) return; drag = null; commit(); };
         preview.addEventListener("pointerup", endDrag);
@@ -1064,7 +1121,7 @@ function openAppearanceSheet() {
           a.wallScale = Number(zoom.value) / 100;
           const out = modal.querySelector("#apZoomV");
           if (out) out.textContent = a.wallScale.toFixed(1) + "\u00d7";
-          paint(); applyAppearance();
+          paint();
         });
         zoom.addEventListener("change", commit);
 
@@ -1073,7 +1130,7 @@ function openAppearanceSheet() {
           a.wallDim = Number(dim.value) / 100;
           const out = modal.querySelector("#apDimV");
           if (out) out.textContent = Math.round(a.wallDim * 100) + "%";
-          paint(); applyAppearance();
+          paint();
         });
         dim.addEventListener("change", commit);
 
@@ -1082,7 +1139,7 @@ function openAppearanceSheet() {
           a.wallBlur = Number(blur.value);
           const out = modal.querySelector("#apBlurV");
           if (out) out.textContent = Math.round(a.wallBlur) + "px";
-          paint(); applyAppearance();
+          paint();
         });
         blur.addEventListener("change", commit);
 
@@ -1378,8 +1435,18 @@ window.addEventListener("hashchange", () => {
 
 // ===== boot =====
 document.addEventListener("gesturestart", e => e.preventDefault());
+
+let wallResizeTimer = null;
+let wallLastAspect = window.innerWidth / Math.max(1, window.innerHeight);
+window.addEventListener("resize", () => {
+  const aspect = window.innerWidth / Math.max(1, window.innerHeight);
+  if (Math.abs(aspect - wallLastAspect) < 0.08) return;
+  wallLastAspect = aspect;
+  clearTimeout(wallResizeTimer);
+  wallResizeTimer = setTimeout(() => { wallComposedKey = ""; applyAppearance(); }, 250);
+});
+
 applyAppearance();
 render();
-</script>
-</body>
+</script></body>
 </html>
