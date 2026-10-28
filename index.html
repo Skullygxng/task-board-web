@@ -56,7 +56,11 @@
   --shadow-float: 0 2px 6px rgba(0, 0, 0, 0.4), 0 14px 38px rgba(0, 0, 0, 0.5);
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html { background: var(--bg); }
+html {
+  background-color: var(--bg);
+  background-image: var(--wall-img, none);
+  background-size: cover; background-position: center; background-repeat: no-repeat;
+}
 html, body { height: 100%; }
 body {
   margin: 0;
@@ -68,9 +72,11 @@ body {
 }
 body.has-wall { background: transparent; }
 #wall {
-  position: fixed; left: 0; right: 0; top: 0;
-  height: 100vh; height: 100dvh; height: 100lvh;
-  min-height: 100vh;
+  position: fixed; left: 0; right: 0; top: -6vh;
+  height: calc(100vh + 12vh);
+  height: calc(100dvh + 12vh);
+  height: calc(100lvh + 12vh);
+  min-height: calc(100vh + 12vh);
   z-index: -2; overflow: hidden; background: var(--bg); display: none;
 }
 body.has-wall #wall { display: block; }
