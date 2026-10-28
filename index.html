@@ -345,7 +345,7 @@ function renderHome(app) {
   ];
   rows.push('<div class="section-label">Projects</div>');
   if (!state.projects.length) {
-    rows.push('<div class="empty" style="padding:8px 0">No projects yet — tap + to add one, like Easy Chain.</div>');
+    rows.push('<div class="empty" style="padding:8px 0">No projects yet — tap + to add one.</div>');
   }
   state.projects.forEach(p => {
     rows.push(
@@ -547,7 +547,7 @@ function openTaskSheet(taskId) {
 function openProjectModal(project, isRename) {
   showModal(
     '<h2>' + (isRename ? "Rename Project" : "New Project") + '</h2>' +
-    '<div class="field"><label>Project name</label><input id="pjName" type="text" placeholder="e.g. Easy Chain" value="' + esc(project ? project.name : "") + '"></div>' +
+    '<div class="field"><label>Project name</label><input id="pjName" type="text" placeholder="Project name" value="' + esc(project ? project.name : "") + '"></div>' +
     '<div class="sheet-actions"><button class="btn btn-primary" id="pjSave">' + (isRename ? "Save" : "Create") + '</button></div>',
     modal => {
       const input = modal.querySelector("#pjName");
