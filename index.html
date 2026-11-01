@@ -150,6 +150,7 @@ button:active { opacity: 0.85; }
   box-shadow: var(--shadow-card); text-align: left; width: 100%; border: none;
   transition: transform 0.15s;
   overflow: hidden;
+  -webkit-touch-callout: none; user-select: none;
 }
 .card:before {
   content: ""; position: absolute; left: 0; top: 10px; bottom: 10px;
@@ -169,6 +170,18 @@ button:active { opacity: 0.85; }
   border: none; background: var(--panel); color: var(--text);
   width: 27px; height: 27px; border-radius: 50%; font-size: 15px; line-height: 1;
 }
+.card.dragging { opacity: 0.3; box-shadow: none; }
+.drag-ghost {
+  position: fixed; z-index: 80; pointer-events: none; opacity: 0.97;
+  transform: rotate(2.5deg) scale(1.04);
+  box-shadow: var(--shadow-float);
+}
+.column.drop-target {
+  outline: 2px dashed var(--accent); outline-offset: -2px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--panel));
+}
+.card.drop-before { box-shadow: 0 -7px 0 -5px var(--accent), var(--shadow-card); }
+.card.drop-after { box-shadow: 0 7px 0 -5px var(--accent), var(--shadow-card); }
 
 /* ===== search ===== */
 .search {
@@ -386,10 +399,27 @@ function loadState() {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const s = JSON.parse(raw);
-      if (s && Array.isArray(s.tasks) && Array.isArray(s.projects)) return s;
+      if (s && Array.isArray(s.tasks) && Array.isArray(s.projects)) { normalizeTaskOrder(s); return s; }
     }
   } catch (e) {}
   return { projects: [], tasks: [] };
+}
+function normalizeTaskOrder(s) {
+  const counters = {};
+  s.tasks.forEach(t => {
+    if (typeof t.order !== "number" || isNaN(t.order)) {
+      counters[t.status] = (counters[t.status] || 0) + 1;
+      t.order = 1000 - counters[t.status];
+    }
+  });
+}
+function topOrderFor(status, projectId, excludeId) {
+  let min = null;
+  state.tasks.forEach(t => {
+    if (t.archived || t.status !== status || t.projectID !== projectId || t.id === excludeId) return;
+    if (min === null || t.order < min) min = t.order;
+  });
+  return min === null ? 0 : min - 1;
 }
 function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
 const ACCENTS = ["#0d9488", "#22a06b", "#3b82f6", "#5b5bd6", "#8e4ec6", "#d6409f", "#dc4444", "#d98324", "#eab308", "#64748b"];
@@ -542,6 +572,7 @@ function snapshot() {
 function undo() {
   if (!undoStack.length) return;
   state = JSON.parse(undoStack.pop());
+  normalizeTaskOrder(state);
   save();
   render();
 }
@@ -678,7 +709,7 @@ function renderHome(app) {
 function renderBoard(app, projectId) {
   const project = projectId ? state.projects.find(p => p.id === projectId) : null;
   const title = project ? project.name : "General";
-  const tasks = visibleTasks(projectId);
+  const tasks = visibleTasks(projectId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   const scopedAll = scoped(projectId);
   const activeFilters = !!(categoryFilter || focusFilter || boardSearch);
 
@@ -697,7 +728,7 @@ function renderBoard(app, projectId) {
         '</div>');
     }).join("");
     return (
-      '<div class="column">' +
+      '<div class="column" data-status="' + sk + '">' +
         '<div class="col-head">' +
           '<i class="dot" style="background:' + STATUSES[sk].color + '"></i>' +
           '<span class="name">' + STATUSES[sk].label + '</span>' +
@@ -766,6 +797,7 @@ function renderBoard(app, projectId) {
     boardSearch = "";
   }
   input.focus();
+  setupBoardDrag(projectId);
 }
 
 // ===== modals =====
@@ -819,6 +851,7 @@ function openTaskModal(taskId) {
       modal.querySelector("#tmDelete").addEventListener("click", () => deleteTask(t.id));
       modal.querySelector("#tmDone").addEventListener("click", () => {
         snapshot();
+        if (d.status !== t.status) t.order = topOrderFor(d.status, d.projectID, t.id);
         t.title = d.title.trim() || t.title;
         t.status = d.status;
         t.category = d.category;
@@ -848,6 +881,7 @@ function openTaskSheet(taskId) {
       modal.querySelectorAll("[data-moveto]").forEach(b => b.addEventListener("click", () => {
         snapshot();
         t.status = b.dataset.moveto;
+        t.order = topOrderFor(b.dataset.moveto, t.projectID, t.id);
         save(); closeModal(); render();
       }));
       modal.querySelector('[data-sheet="duplicate"]').addEventListener("click", () => duplicateTask(t.id));
@@ -978,6 +1012,7 @@ function openHomeMenu() {
             if (!parsed || !Array.isArray(parsed.tasks) || !Array.isArray(parsed.projects)) throw new Error("bad");
             snapshot();
             state = parsed;
+            normalizeTaskOrder(state);
             save();
             closeModal();
             render();
@@ -1215,6 +1250,7 @@ function addTask(projectId) {
     id: uid(), title: title,
     category: activeCategory(), status: "todo",
     projectID: projectId, focus: null,
+    order: topOrderFor("todo", projectId),
     archived: false, createdAt: Date.now()
   });
   draft = "";
@@ -1236,7 +1272,9 @@ function duplicateTask(task) {
   snapshot();
   const copy = {
     id: uid(), title: task.title, category: task.category, status: task.status,
-    projectID: task.projectID, focus: task.focus, archived: false, createdAt: Date.now()
+    projectID: task.projectID, focus: task.focus,
+    order: (typeof task.order === "number" ? task.order + 0.5 : 0),
+    archived: false, createdAt: Date.now()
   };
   const idx = state.tasks.findIndex(x => x.id === task.id);
   state.tasks.splice(idx < 0 ? 0 : idx + 1, 0, copy);
@@ -1395,8 +1433,163 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
 }
 
+// ===== drag & drop between columns =====
+let dragCtx = null;
+let suppressClick = false;
+let autoScrollRaf = null;
+let lastPointerX = 0;
+let lastPointerY = 0;
+
+function clearDropHighlights() {
+  document.querySelectorAll(".column.drop-target").forEach(el => el.classList.remove("drop-target"));
+  document.querySelectorAll(".card.drop-before, .card.drop-after").forEach(el => el.classList.remove("drop-before", "drop-after"));
+}
+function updateDropTargets(x, y) {
+  clearDropHighlights();
+  const hit = document.elementFromPoint(x, y);
+  const col = hit ? hit.closest(".column") : null;
+  if (!col) return;
+  col.classList.add("drop-target");
+  const cards = Array.from(col.querySelectorAll(".card:not(.dragging)"));
+  let placed = false;
+  for (const card of cards) {
+    const r = card.getBoundingClientRect();
+    if (y < r.top + r.height / 2) { card.classList.add("drop-before"); placed = true; break; }
+  }
+  if (!placed && cards.length) cards[cards.length - 1].classList.add("drop-after");
+}
+function stopAutoScroll() {
+  if (autoScrollRaf) { cancelAnimationFrame(autoScrollRaf); autoScrollRaf = null; }
+}
+function startAutoScroll() {
+  const board = document.querySelector(".board");
+  if (!board) return;
+  const step = () => {
+    if (!dragCtx || !dragCtx.started) { stopAutoScroll(); return; }
+    const r = board.getBoundingClientRect();
+    const edge = 56;
+    let dx = 0;
+    if (lastPointerX < r.left + edge) dx = -Math.ceil(((r.left + edge - lastPointerX) / edge) * 12);
+    else if (lastPointerX > r.right - edge) dx = Math.ceil(((lastPointerX - (r.right - edge)) / edge) * 12);
+    if (dx) board.scrollLeft += dx;
+    autoScrollRaf = requestAnimationFrame(step);
+  };
+  autoScrollRaf = requestAnimationFrame(step);
+}
+function cleanupDrag() {
+  if (!dragCtx) return;
+  clearTimeout(dragCtx.timer);
+  if (dragCtx.ghost && dragCtx.ghost.parentNode) dragCtx.ghost.parentNode.removeChild(dragCtx.ghost);
+  if (dragCtx.sourceCard) dragCtx.sourceCard.classList.remove("dragging");
+  stopAutoScroll();
+  dragCtx = null;
+}
+function beginDrag() {
+  const r = dragCtx.card.getBoundingClientRect();
+  const ghost = dragCtx.card.cloneNode(true);
+  ghost.classList.remove("drop-before", "drop-after");
+  ghost.classList.add("drag-ghost");
+  ghost.style.width = r.width + "px";
+  ghost.style.left = r.left + "px";
+  ghost.style.top = r.top + "px";
+  document.body.appendChild(ghost);
+  dragCtx.card.classList.add("dragging");
+  dragCtx.sourceCard = dragCtx.card;
+  dragCtx.ghost = ghost;
+  dragCtx.started = true;
+  suppressClick = true;
+  if (navigator.vibrate) try { navigator.vibrate(12); } catch (err) {}
+  startAutoScroll();
+  updateDropTargets(lastPointerX, lastPointerY);
+}
+function onDragMove(e) {
+  if (!dragCtx) return;
+  lastPointerX = e.clientX;
+  lastPointerY = e.clientY;
+  if (!dragCtx.started) {
+    if (Math.abs(e.clientX - dragCtx.startX) > 8 || Math.abs(e.clientY - dragCtx.startY) > 8) {
+      clearTimeout(dragCtx.timer);
+      dragCtx = null;
+    }
+    return;
+  }
+  dragCtx.ghost.style.left = (e.clientX - dragCtx.offsetX) + "px";
+  dragCtx.ghost.style.top = (e.clientY - dragCtx.offsetY) + "px";
+  updateDropTargets(e.clientX, e.clientY);
+}
+function onDragEnd() {
+  if (!dragCtx) return;
+  clearTimeout(dragCtx.timer);
+  const wasDrag = dragCtx.started;
+  const task = dragCtx.task;
+  const projectId = dragCtx.projectId;
+  if (wasDrag) {
+    const moved = Math.abs(lastPointerX - dragCtx.startX) > 4 || Math.abs(lastPointerY - dragCtx.startY) > 4;
+    const col = document.querySelector(".column.drop-target");
+    if (col && moved) {
+      const targetStatus = col.dataset.status;
+      const beforeEl = document.querySelector(".card.drop-before");
+      const useBefore = beforeEl && beforeEl.dataset.id !== task.id;
+      const newOrder = boardDropOrder(task, targetStatus, useBefore ? beforeEl : null, projectId);
+      if (task.status !== targetStatus || task.order !== newOrder) {
+        snapshot();
+        task.status = targetStatus;
+        task.order = newOrder;
+        save();
+      }
+    }
+  }
+  cleanupDrag();
+  clearDropHighlights();
+  if (wasDrag) render();
+}
+function boardDropOrder(dragged, targetStatus, beforeCardEl, projectId) {
+  const others = state.tasks.filter(t =>
+    !t.archived && t.status === targetStatus && t.projectID === projectId && t.id !== dragged.id
+  ).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  if (!others.length) return 0;
+  if (beforeCardEl) {
+    const idx = others.findIndex(t => t.id === beforeCardEl.dataset.id);
+    if (idx === 0) return others[0].order - 1;
+    if (idx > 0) return (others[idx - 1].order + others[idx].order) / 2;
+  }
+  return others[others.length - 1].order + 1;
+}
+function setupBoardDrag(projectId) {
+  document.getElementById("app").querySelectorAll(".board .card").forEach(card => {
+    card.addEventListener("pointerdown", e => {
+      if (dragCtx) return;
+      if (e.button && e.button !== 0) return;
+      if (e.target.closest(".card-menu")) return;
+      const task = state.tasks.find(t => t.id === card.dataset.id);
+      if (!task || task.archived) return;
+      const rect = card.getBoundingClientRect();
+      dragCtx = {
+        pointerId: e.pointerId, id: task.id, task, card,
+        startX: e.clientX, startY: e.clientY,
+        offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top,
+        projectId: projectId === undefined ? null : projectId,
+        timer: setTimeout(() => { if (dragCtx && dragCtx.card === card) beginDrag(); }, 350),
+        started: false
+      };
+      lastPointerX = e.clientX;
+      lastPointerY = e.clientY;
+    });
+  });
+}
+document.addEventListener("pointermove", onDragMove, { passive: false });
+document.addEventListener("pointerup", onDragEnd);
+document.addEventListener("pointercancel", onDragEnd);
+document.addEventListener("touchmove", e => {
+  if (dragCtx && dragCtx.started) e.preventDefault();
+}, { passive: false });
+document.addEventListener("contextmenu", e => {
+  if (dragCtx && dragCtx.started) e.preventDefault();
+});
+
 // ===== global events =====
 document.addEventListener("click", e => {
+  if (suppressClick) { suppressClick = false; e.stopPropagation(); e.preventDefault(); return; }
   const el = e.target.closest("[data-action]");
   if (!el || el.disabled) return;
   const r = route();
