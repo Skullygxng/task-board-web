@@ -1372,7 +1372,11 @@ function executeCommand(cmd, projectId) {
   const candidates = state.tasks.filter(t =>
     !t.archived && t.projectID === projectId && t.status !== cmd.target &&
     (!cmd.category || t.category === cmd.category)
-  ).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  ).sort((a, b) => {
+    const so = Object.keys(STATUSES);
+    const s = so.indexOf(a.status) - so.indexOf(b.status);
+    return s !== 0 ? s : (a.order ?? 0) - (b.order ?? 0);
+  });
   if (!candidates.length) {
     toast("Couldn't find a " + (cmd.category ? CATEGORIES[cmd.category].label + " " : "") + "task to move to " + STATUSES[cmd.target].label);
     return false;
