@@ -1314,8 +1314,95 @@ function compressImage(img, maxEdge, quality) {
   return url;
 }
 
+// ===== voice commands =====
+function normalizeStatusFromPhrase(p) {
+  const s = p.replace(/[\s-]+/g, " ").trim();
+  if (s === "done" || s === "completed") return "done";
+  if (s === "to do" || s === "todo") return "todo";
+  return "inProgress";
+}
+function parseOrdinalFrom(s) {
+  const m = s.match(/\b(first|second|third|fourth|fifth|1st|2nd|3rd|4th|5th|[1-5])\b/i);
+  if (!m) return 1;
+  const map = { first: 1, "1st": 1, second: 2, "2nd": 2, third: 3, "3rd": 3, fourth: 4, "4th": 4, fifth: 5, "5th": 5 };
+  const w = m[1].toLowerCase();
+  return map[w] || (parseInt(w, 10) || 1);
+}
+function parseCommandCategory(s) {
+  const m = s.match(/\b(bugs?|updates?|projects?|notes?|tasks?|items?|cards?)\b/i);
+  if (!m) return null;
+  const w = m[1].toLowerCase().replace(/s$/, "");
+  if (w === "bug") return "bug";
+  if (w === "update") return "update";
+  if (w === "project") return "project";
+  if (w === "note") return "note";
+  return null;
+}
+function parseCommand(text) {
+  const t = String(text || "").trim();
+  if (!t) return null;
+  const doneM = t.match(/^(done|completed)\s+(.+)$/i);
+  if (doneM) return { type: "add", status: "done", title: doneM[2].trim() };
+  const addM = t.match(/^(to-?do|todo|in-?progress|progress)\s*[:;]\s*(.+)$/i);
+  if (addM) return { type: "add", status: normalizeStatusFromPhrase(addM[1]), title: addM[2].trim() };
+  if (!/^move\s+/i.test(t)) return null;
+  const m = t.match(/\bto\s*(?:the\s*)?(to-?do|todo|in-?progress|progress|done|completed)\s*[!.?]?\s*$/i);
+  if (!m) return null;
+  const body = t.slice(4, m.index).replace(/^(the|a|my)\s+/i, "").trim();
+  return { type: "move", target: normalizeStatusFromPhrase(m[1]), category: parseCommandCategory(body), ordinal: parseOrdinalFrom(body) };
+}
+function executeCommand(cmd, projectId) {
+  if (cmd.type === "add") {
+    const title = cmd.title;
+    if (!title) { toast("Say what to add after the colon"); return true; }
+    snapshot();
+    state.tasks.unshift({
+      id: uid(), title: title,
+      category: detectCategory(title), status: cmd.status,
+      projectID: projectId, focus: null,
+      order: topOrderFor(cmd.status, projectId),
+      doneAt: cmd.status === "done" ? Date.now() : null,
+      archived: false, createdAt: Date.now()
+    });
+    save();
+    render();
+    toast("Added to " + STATUSES[cmd.status].label + ": " + title);
+    return true;
+  }
+  const candidates = state.tasks.filter(t =>
+    !t.archived && t.projectID === projectId && t.status !== cmd.target &&
+    (!cmd.category || t.category === cmd.category)
+  ).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  if (!candidates.length) {
+    toast("Couldn't find a " + (cmd.category ? CATEGORIES[cmd.category].label + " " : "") + "task to move to " + STATUSES[cmd.target].label);
+    return false;
+  }
+  const t = candidates[Math.min(cmd.ordinal - 1, candidates.length - 1)];
+  snapshot();
+  t.status = cmd.target;
+  t.doneAt = cmd.target === "done" ? Date.now() : null;
+  t.order = topOrderFor(cmd.target, projectId, t.id);
+  save();
+  render();
+  toast("Moved " + (t.title.length > 32 ? t.title.slice(0, 32) + "…" : t.title) + " to " + STATUSES[cmd.target].label);
+  return true;
+}
+function tryRunCommandFromDraft(projectId) {
+  const cmd = parseCommand(draft);
+  if (!cmd) return false;
+  const handled = executeCommand(cmd, projectId);
+  if (handled) { draft = ""; manualCategory = null; }
+  return handled;
+}
+
 // ===== actions =====
 function addTask(projectId) {
+  const cmd = parseCommand(draft);
+  if (cmd) {
+    if (executeCommand(cmd, projectId)) { draft = ""; manualCategory = null; }
+    render();
+    return;
+  }
   const title = draft.trim();
   if (!title) return;
   snapshot();
@@ -1446,6 +1533,7 @@ function download(name, text, mime) {
 const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let isListening = false;
+let voiceHadText = false;
 
 function setListening(b) {
   isListening = b;
@@ -1473,18 +1561,26 @@ function toggleMic() {
       else interim += text;
     }
     draft = (finalText + interim).trim();
+    if (draft) voiceHadText = true;
     const input = document.getElementById("draftInput");
     if (input) {
       input.value = draft;
       document.getElementById("addBtn").disabled = !draft.trim();
     }
   };
-  recognition.onend = () => setListening(false);
+  recognition.onend = () => {
+    setListening(false);
+    if (!voiceHadText) return;
+    const r = route();
+    const pid = r.view === "board" ? r.projectId : null;
+    setTimeout(() => { tryRunCommandFromDraft(pid); }, 150);
+  };
   recognition.onerror = e => {
     setListening(false);
     if (e.error && e.error !== "aborted" && e.error !== "no-speech") toast("Listening stopped: " + e.error);
   };
   try {
+    voiceHadText = false;
     recognition.start();
     setListening(true);
   } catch (err) {
