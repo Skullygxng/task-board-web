@@ -1341,12 +1341,12 @@ function parseCommandCategory(s) {
 function parseCommand(text) {
   const t = String(text || "").trim();
   if (!t) return null;
-  const doneM = t.match(/^(done|completed)\s+(.+)$/i);
-  if (doneM) return { type: "add", status: "done", title: doneM[2].trim() };
-  const addM = t.match(/^(to-?do|todo|in-?progress|progress)\s*[:;]\s*(.+)$/i);
+  const doneM = t.match(/^(done|completed)[:\s]+(.+)$/i);
+  if (doneM) return { type: "add", status: "done", title: doneM[2].replace(/^[:\s]+/, "").trim() };
+  const addM = t.match(/^(to[\s-]?do|todo|in[\s-]?progress|progress)\s*[:;]\s*(.+)$/i);
   if (addM) return { type: "add", status: normalizeStatusFromPhrase(addM[1]), title: addM[2].trim() };
   if (!/^move\s+/i.test(t)) return null;
-  const m = t.match(/\bto\s*(?:the\s*)?(to-?do|todo|in-?progress|progress|done|completed)\s*[!.?]?\s*$/i);
+  const m = t.match(/\bto\s*(?:the\s*)?(to[\s-]?do|in[\s-]?progress|progress|done|completed)\s*[!.?]?\s*$/i);
   if (!m) return null;
   const body = t.slice(4, m.index).replace(/^(the|a|my)\s+/i, "").trim();
   return { type: "move", target: normalizeStatusFromPhrase(m[1]), category: parseCommandCategory(body), ordinal: parseOrdinalFrom(body) };
