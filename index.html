@@ -191,6 +191,9 @@ button:active { opacity: 0.85; }
 }
 .search:focus { outline: none; border-color: var(--accent); }
 
+.stat.warn svg { color: var(--danger); }
+.stat.warn .stat-value { color: var(--danger); }
+
 /* ===== quick add ===== */
 .quickbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 9; padding: 8px 16px calc(10px + env(safe-area-inset-bottom)); }
 .listen-hint {
@@ -374,6 +377,9 @@ const I = {
   x: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>',
   tray: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h5l2 3h4l2-3h5"/><path d="M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></svg>',
   ghost: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/></svg>',
+  bug: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6a4 4 0 0 1 4 4v4a4 4 0 0 1-8 0v-4a4 4 0 0 1 4-4z"/><path d="M12 6V3M7 8L5 6M17 8l2-2M6 12H3M21 12h-3M7 16l-2 2M17 16l2 2"/></svg>',
+  check: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
+  clock: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   archive: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>',
   export_: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>',
   restore: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3.5 13a9 9 0 1 0 2.6-7L3 7.5"/></svg>',
@@ -635,6 +641,48 @@ const greetingSub = () => {
   return date + " · " + open + " open task" + (open === 1 ? "" : "s");
 };
 
+// ===== weekly progress stats =====
+function startOfWeek() {
+  const d = new Date();
+  const day = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - day);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+function ageLabel(ts) {
+  const h = (Date.now() - ts) / 3600000;
+  if (h < 1) return "<1h";
+  if (h < 24) return Math.round(h) + "h";
+  return Math.round(h / 24) + "d";
+}
+function statsHtml(pid) {
+  const tasks = scoped(pid);
+  const chips = [];
+  const openBugs = tasks.filter(t => t.category === "bug" && t.status !== "done").length;
+  chips.push(
+    '<div class="stat' + (openBugs ? " warn" : "") + '">' + I.bug +
+      '<div class="stat-main"><span class="stat-label">Open bugs</span>' +
+      '<span class="stat-value">' + openBugs + '</span></div></div>');
+  const finished = state.tasks.filter(t =>
+    t.projectID === pid && t.status === "done" && t.doneAt && t.doneAt >= startOfWeek()).length;
+  chips.push(
+    '<div class="stat">' + I.check +
+      '<div class="stat-main"><span class="stat-label">Done this week</span>' +
+      '<span class="stat-value">' + finished + '</span></div></div>');
+  Object.keys(STATUSES).forEach(sk => {
+    const col = tasks.filter(t => t.status === sk);
+    if (!col.length) return;
+    let oldest = col[0];
+    col.forEach(t => { if (t.createdAt < oldest.createdAt) oldest = t; });
+    const warn = sk !== "done" && (Date.now() - oldest.createdAt) > 7 * 86400000;
+    chips.push(
+      '<div class="stat' + (warn ? " warn" : "") + '" title="' + esc(oldest.title) + '">' + I.clock +
+        '<div class="stat-main"><span class="stat-label">' + STATUSES[sk].label + ' oldest</span>' +
+        '<span class="stat-value">' + ageLabel(oldest.createdAt) + '</span></div></div>');
+  });
+  return '<div class="stats">' + chips.join("") + '</div>';
+}
+
 // ===== routing =====
 function route() {
   const h = location.hash;
@@ -762,6 +810,7 @@ function renderBoard(app, projectId) {
       '</div>' +
       '<input id="searchInput" class="search" type="search" placeholder="Search tasks" value="' + esc(boardSearch) + '">' +
     '</header>' +
+    statsHtml(projectId) +
     '<div class="board">' + columns + '</div>' +
     '<div class="quickbar">' +
       '<div class="listen-hint" id="listenHint"><span class="pulse"></span>Listening&hellip; tap the mic to stop</div>' +
@@ -854,6 +903,7 @@ function openTaskModal(taskId) {
         if (d.status !== t.status) t.order = topOrderFor(d.status, d.projectID, t.id);
         t.title = d.title.trim() || t.title;
         t.status = d.status;
+        t.doneAt = d.status === "done" ? (t.doneAt || Date.now()) : null;
         t.category = d.category;
         t.projectID = d.projectID;
         t.focus = d.focus;
@@ -881,6 +931,7 @@ function openTaskSheet(taskId) {
       modal.querySelectorAll("[data-moveto]").forEach(b => b.addEventListener("click", () => {
         snapshot();
         t.status = b.dataset.moveto;
+        t.doneAt = b.dataset.moveto === "done" ? Date.now() : null;
         t.order = topOrderFor(b.dataset.moveto, t.projectID, t.id);
         save(); closeModal(); render();
       }));
@@ -1274,6 +1325,7 @@ function duplicateTask(task) {
     id: uid(), title: task.title, category: task.category, status: task.status,
     projectID: task.projectID, focus: task.focus,
     order: (typeof task.order === "number" ? task.order + 0.5 : 0),
+    doneAt: task.doneAt || null,
     archived: false, createdAt: Date.now()
   };
   const idx = state.tasks.findIndex(x => x.id === task.id);
@@ -1533,6 +1585,10 @@ function onDragEnd() {
       const newOrder = boardDropOrder(task, targetStatus, useBefore ? beforeEl : null, projectId);
       if (task.status !== targetStatus || task.order !== newOrder) {
         snapshot();
+        if (task.status !== targetStatus) {
+          if (targetStatus === "done") task.doneAt = Date.now();
+          else task.doneAt = null;
+        }
         task.status = targetStatus;
         task.order = newOrder;
         save();
