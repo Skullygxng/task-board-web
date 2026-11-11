@@ -183,6 +183,30 @@ button:active { opacity: 0.85; }
 .card.drop-before { box-shadow: 0 -7px 0 -5px var(--accent), var(--shadow-card); }
 .card.drop-after { box-shadow: 0 7px 0 -5px var(--accent), var(--shadow-card); }
 
+/* ===== attachments ===== */
+.card-attach { display: flex; align-items: center; gap: 5px; }
+.card-attach img { width: 26px; height: 26px; border-radius: 7px; object-fit: cover; border: 1px solid var(--line); }
+.card-attach .cnt { font-size: 11px; color: var(--muted); font-weight: 650; }
+.attach-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.attach-thumb { position: relative; width: 84px; height: 84px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
+.attach-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.attach-remove {
+  position: absolute; top: 4px; right: 4px; width: 20px; height: 20px;
+  border-radius: 50%; border: none; background: rgba(20, 18, 14, 0.65);
+  color: #fff; font-size: 10px; line-height: 1;
+}
+#lightbox {
+  position: fixed; inset: 0; z-index: 120;
+  background: rgba(12, 11, 9, 0.92);
+  display: flex; align-items: center; justify-content: center;
+}
+#lightbox img { max-width: 92vw; max-height: 84vh; border-radius: 12px; }
+#lightbox .lb-hint {
+  position: absolute; bottom: calc(20px + env(safe-area-inset-bottom));
+  left: 0; right: 0; text-align: center; color: #cfc9bd; font-size: 12px;
+}
+.round-btn.attach { background: var(--accent-soft); color: var(--accent); }
+
 /* ===== search ===== */
 .search {
   display: block; margin-top: 14px; width: 100%; padding: 10px 14px;
@@ -449,7 +473,10 @@ function topOrderFor(status, projectId, excludeId) {
   });
   return min === null ? 0 : min - 1;
 }
-function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(state)); }
+  catch (e) { toast("Storage is full — remove a few screenshots or the wallpaper"); }
+}
 const ACCENTS = ["#0d9488", "#22a06b", "#3b82f6", "#5b5bd6", "#8e4ec6", "#d6409f", "#dc4444", "#d98324", "#eab308", "#64748b"];
 
 const DEFAULT_LOOK = {
@@ -793,7 +820,13 @@ function renderBoard(app, projectId) {
         '<div class="card" data-action="open-task" data-id="' + t.id + '" style="--stripe:' + c.color + '">' +
           '<div class="chip-row">' + chip(c, c.label) + (f ? chip(f, f.label) : "") + '</div>' +
           '<div class="card-title">' + esc(t.title) + '</div>' +
-          '<div class="card-foot"><span>' + fmtDate(t.createdAt) + '</span>' +
+          '<div class="card-foot">' +
+            '<span style="display:flex;align-items:center;gap:10px">' +
+              (t.attachments && t.attachments.length
+                ? '<span class="card-attach" data-action="open-lightbox" data-id="' + t.id + '"><img src="' + t.attachments[0].data + '" alt=""><span class="cnt">' + t.attachments.length + '</span></span>'
+                : "") +
+              '<span>' + fmtDate(t.createdAt) + '</span>' +
+            '</span>' +
           '<button class="card-menu" data-action="task-menu" data-id="' + t.id + '">&#8943;</button></div>' +
         '</div>');
     }).join("");
@@ -841,9 +874,11 @@ function renderBoard(app, projectId) {
           '<i class="dot" style="background:' + cat.color + '"></i><span>' + cat.label + '</span>' +
         '</button>' +
         '<input id="draftInput" type="text" placeholder="Add a task&hellip;" value="' + esc(draft) + '" autocomplete="off">' +
+        '<button class="round-btn attach" id="attachBtn" title="Attach screenshot">' + I.photo + '</button>' +
         '<button class="round-btn mic' + (isListening ? " recording" : "") + '" id="micBtn" data-action="toggle-mic" title="Dictate">' + I.mic + '</button>' +
         '<button class="round-btn add" id="addBtn" data-action="add-task" title="Add"' + (draft.trim() ? "" : " disabled") + '>' + I.up + '</button>' +
       '</div>' +
+      '<input type="file" id="quickAttach" accept="image/*" style="display:none">' +
     '</div>';
 
   const input = document.getElementById("draftInput");
@@ -869,6 +904,16 @@ function renderBoard(app, projectId) {
   }
   input.focus();
   setupBoardDrag(projectId);
+  const quickAttach = document.getElementById("quickAttach");
+  if (quickAttach) {
+    document.getElementById("attachBtn").addEventListener("click", () => quickAttach.click());
+    quickAttach.addEventListener("change", () => {
+      const file = quickAttach.files[0];
+      if (!file) return;
+      attachPhotoFromFile(file, projectId);
+      quickAttach.value = "";
+    });
+  }
 }
 
 // ===== modals =====
@@ -907,6 +952,11 @@ function openTaskModal(taskId) {
     '<div class="field"><label>Board</label><select id="tmProject">' + projectOptions + '</select></div>' +
     '<div class="field"><label>Category</label>' + seg("category", CATEGORIES, d.category) + '</div>' +
     '<div class="field"><label>Focus</label><select id="tmFocus">' + focusOptions + '</select></div>' +
+    '<div class="field"><label>Attachments</label>' +
+      '<div class="attach-grid" id="tmAttachGrid">' + renderAttachGrid(t) + '</div>' +
+      '<button class="small-btn" id="tmAddAttach" style="margin-top:10px">Add photo</button>' +
+      '<input type="file" id="tmAttachFile" accept="image/*" style="display:none">' +
+    '</div>' +
     '<div class="sheet-actions">' +
       '<button class="btn btn-danger" id="tmDelete">Delete</button>' +
       '<button class="btn btn-primary" id="tmDone">Done</button>' +
@@ -919,6 +969,46 @@ function openTaskModal(taskId) {
       }));
       modal.querySelector("#tmProject").addEventListener("change", e => { d.projectID = e.target.value || null; });
       modal.querySelector("#tmFocus").addEventListener("change", e => { d.focus = e.target.value || null; });
+
+      const grid = modal.querySelector("#tmAttachGrid");
+      const refreshGrid = () => { grid.innerHTML = renderAttachGrid(t); };
+      modal.querySelector("#tmAddAttach").addEventListener("click", () => modal.querySelector("#tmAttachFile").click());
+      modal.querySelector("#tmAttachFile").addEventListener("change", () => {
+        const file = modal.querySelector("#tmAttachFile").files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => {
+            snapshot();
+            (t.attachments = t.attachments || []).push({ id: uid(), name: file.name || "Screenshot", data: compressImage(img, 1400, 0.72) });
+            save();
+            refreshGrid();
+            render();
+            toast("Attachment added");
+          };
+          img.onerror = () => toast("That image could not be loaded");
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+      grid.addEventListener("click", e => {
+        const rm = e.target.closest("[data-attach-remove]");
+        if (rm) {
+          snapshot();
+          t.attachments.splice(Number(rm.dataset.attachRemove), 1);
+          save();
+          refreshGrid();
+          render();
+          return;
+        }
+        const view = e.target.closest("[data-attach-view]");
+        if (view) {
+          const a = (t.attachments || [])[Number(view.dataset.attachView)];
+          if (a) openLightbox(a.data);
+        }
+      });
+
       modal.querySelector("#tmDelete").addEventListener("click", () => deleteTask(t.id));
       modal.querySelector("#tmDone").addEventListener("click", () => {
         snapshot();
@@ -1399,6 +1489,57 @@ function tryRunCommandFromDraft(projectId) {
   return handled;
 }
 
+// ===== attachments =====
+function attachPhotoFromFile(file, projectId) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      snapshot();
+      const title = draft.trim() ||
+        ("Screenshot " + new Date().toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }));
+      state.tasks.unshift({
+        id: uid(), title: title,
+        category: draft.trim() ? detectCategory(draft) : "note",
+        status: "todo",
+        projectID: projectId, focus: null,
+        order: topOrderFor("todo", projectId),
+        doneAt: null,
+        attachments: [{ id: uid(), name: file.name || "Screenshot", data: compressImage(img, 1400, 0.72) }],
+        archived: false, createdAt: Date.now()
+      });
+      draft = "";
+      manualCategory = null;
+      save();
+      render();
+      toast("Screenshot attached to a new task");
+    };
+    img.onerror = () => toast("That image could not be loaded");
+    img.src = reader.result;
+  };
+  reader.onerror = () => toast("That file could not be read");
+  reader.readAsDataURL(file);
+}
+function renderAttachGrid(t) {
+  const list = t.attachments || [];
+  if (!list.length) return '<div class="wp-empty" style="padding:14px 10px">No attachments yet.</div>';
+  return list.map((a, i) =>
+    '<div class="attach-thumb" data-attach-view="' + i + '"><img src="' + a.data + '" alt="">' +
+    '<button class="attach-remove" data-attach-remove="' + i + '">&#10005;</button></div>'
+  ).join("");
+}
+function openLightbox(src) {
+  let lb = document.getElementById("lightbox");
+  if (!lb) {
+    lb = document.createElement("div");
+    lb.id = "lightbox";
+    lb.innerHTML = '<img alt=""><div class="lb-hint">Tap anywhere to close</div>';
+    lb.addEventListener("click", () => lb.remove());
+    document.body.appendChild(lb);
+  }
+  lb.querySelector("img").src = src;
+}
+
 // ===== actions =====
 function addTask(projectId) {
   const cmd = parseCommand(draft);
@@ -1439,6 +1580,7 @@ function duplicateTask(task) {
     projectID: task.projectID, focus: task.focus,
     order: (typeof task.order === "number" ? task.order + 0.5 : 0),
     doneAt: task.doneAt || null,
+    attachments: (task.attachments || []).map(a => ({ id: uid(), name: a.name, data: a.data })),
     archived: false, createdAt: Date.now()
   };
   const idx = state.tasks.findIndex(x => x.id === task.id);
@@ -1793,6 +1935,12 @@ document.addEventListener("click", e => {
     case "open-filters": openFilterSheet(); break;
     case "restore": restoreTask(el.dataset.id); break;
     case "purge": purgeTask(el.dataset.id); break;
+    case "open-lightbox": {
+      const t2 = state.tasks.find(x => x.id === el.dataset.id);
+      const a2 = t2 && (t2.attachments || [])[0];
+      if (a2) openLightbox(a2.data);
+      break;
+    }
   }
 });
 window.addEventListener("hashchange", () => {
